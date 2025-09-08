@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "737965824082",
+    "project_id": "resqrouterr",
+    "storage_bucket": "resqrouterr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:737965824082:android:126af50c59f27b7a5fa78b",
+        "android_client_info": {
+          "package_name": "com.example.resqroute"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSjh6NpyIOmLDHjof4wEEoHgR13zxpobg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
