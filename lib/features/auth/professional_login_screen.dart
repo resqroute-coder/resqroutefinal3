@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfessionalLoginScreen extends StatefulWidget {
   const ProfessionalLoginScreen({Key? key}) : super(key: key);
@@ -13,6 +15,10 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
   final _passwordController = TextEditingController();
   String? _selectedDepartment;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final List<Map<String, dynamic>> _departments = [
     {
@@ -212,7 +218,7 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
 
                         // Employee ID field
                         const Text(
-                          'Employee ID',
+                          'Employee ID or Email',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
@@ -223,7 +229,7 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
                         TextField(
                           controller: _employeeIdController,
                           decoration: InputDecoration(
-                            hintText: 'Enter your employee ID',
+                            hintText: 'Enter your employee ID or email',
                             hintStyle: const TextStyle(color: Colors.grey),
                             filled: true,
                             fillColor: Colors.grey.withOpacity(0.05),
@@ -281,7 +287,7 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _handleLogin,
+                            onPressed: _isLoading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFF5252),
                               shape: RoundedRectangleBorder(
@@ -289,63 +295,23 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
                               ),
                               elevation: 0,
                             ),
-                            child: const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Demo Credentials section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Demo Credentials:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Driver: EMP001 / password123',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Police: OFF001 / password123',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Hospital: ADM001 / password123',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
@@ -388,11 +354,10 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
     );
   }
 
-  void _handleLogin() {
-    final employeeId = _employeeIdController.text.trim();
+  Future<void> _handleLogin() async {
+    final inputIdOrEmail = _employeeIdController.text.trim();
     final password = _passwordController.text.trim();
 
-    // Validate inputs
     if (_selectedDepartment == null) {
       Get.snackbar(
         'Error',
@@ -403,52 +368,130 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
       return;
     }
 
-    if (employeeId.isEmpty || password.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please enter both Employee ID and Password',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Map department to role
+      String expectedRole;
+      String dashboardRoute;
+      
+      switch (_selectedDepartment) {
+        case 'Ambulance Driver':
+          expectedRole = 'driver';
+          dashboardRoute = '/driver-dashboard';
+          break;
+        case 'Traffic Police':
+          expectedRole = 'traffic_police';
+          dashboardRoute = '/traffic-police-dashboard';
+          break;
+        case 'Hospital Admin':
+          expectedRole = 'hospital_staff';
+          dashboardRoute = '/hospital-dashboard';
+          break;
+        default:
+          throw Exception('Invalid department selected');
+      }
+
+      // Determine the email to use for FirebaseAuth sign-in.
+      // If the user typed an email, use it. If they typed a code (e.g., EMP001),
+      // construct an internal email like emp001@pro.resqroute (adjust domain if needed).
+      final bool inputLooksLikeEmail = inputIdOrEmail.contains('@');
+      final String loginEmail = inputLooksLikeEmail
+          ? inputIdOrEmail
+          : '${inputIdOrEmail.toLowerCase()}@pro.resqroute';
+
+      // Authenticate with Firebase Auth
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: loginEmail,
+        password: password,
       );
-      return;
-    }
 
-    // Validate credentials based on department
-    bool isValidCredentials = false;
-    String dashboardRoute = '';
+      final user = userCredential.user;
+      if (user == null) {
+        throw Exception('Authentication failed');
+      }
 
-    if (_selectedDepartment == 'Ambulance Driver') {
-      if (employeeId == 'EMP001' && password == 'password123') {
-        isValidCredentials = true;
-        dashboardRoute = '/driver-dashboard';
-      }
-    } else if (_selectedDepartment == 'Traffic Police') {
-      if (employeeId == 'OFF001' && password == 'password123') {
-        isValidCredentials = true;
-        dashboardRoute = '/traffic-police-dashboard';
-      }
-    } else if (_selectedDepartment == 'Hospital Admin') {
-      if (employeeId == 'ADM001' && password == 'password123') {
-        isValidCredentials = true;
-        dashboardRoute = '/hospital-dashboard';
-      }
-    }
+      // Read professional profile from 'professional/{uid}'
+      final profileDoc = await _firestore.collection('professional').doc(user.uid).get();
 
-    if (isValidCredentials) {
+      if (!profileDoc.exists) {
+        await _auth.signOut();
+        throw Exception('Professional profile not found. Please contact administrator.');
+      }
+
+      final data = profileDoc.data()!;
+      final userRole = (data['role'] as String?)?.trim();
+      final profileEmployeeId = (data['employeeId'] as String?)?.trim();
+      final profileEmail = (data['email'] as String?)?.trim();
+
+      // Verify expected role matches
+      if (userRole != expectedRole) {
+        await _auth.signOut();
+        throw Exception('Account role mismatch for $_selectedDepartment.');
+      }
+
+      // Verify identity depending on the input the user typed
+      final bool identityMatches = inputLooksLikeEmail
+          ? (profileEmail != null &&
+              profileEmail.toLowerCase() == inputIdOrEmail.toLowerCase())
+          : (profileEmployeeId != null && profileEmployeeId.toUpperCase() == inputIdOrEmail.toUpperCase());
+
+      if (!identityMatches) {
+        await _auth.signOut();
+        throw Exception('Account verification failed. Please check your credentials.');
+      }
+
+      // Success - navigate to dashboard
       Get.snackbar(
         'Success',
         'Login successful! Welcome to $_selectedDepartment dashboard',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
+      
       Get.offAllNamed(dashboardRoute);
-    } else {
+
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          errorMessage = 'Invalid Employee ID or Password for $_selectedDepartment';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled. Please contact administrator.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later.';
+          break;
+        default:
+          errorMessage = 'Login failed: ${e.message}';
+      }
+      
       Get.snackbar(
         'Login Failed',
-        'Invalid Employee ID or Password for $_selectedDepartment',
+        errorMessage,
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        duration: const Duration(seconds: 4),
       );
+    } catch (e) {
+      Get.snackbar(
+        'Login Failed',
+        e.toString(),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 }

@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper functions for authentication and authorization
+    // Simple authentication-based rules that support both patients and professionals
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,242 +11,32 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    function hasRole(role) {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-    
-    function isPatient() {
-      return hasRole('patient');
-    }
-    
-    function isDriver() {
-      return hasRole('driver');
-    }
-    
-    function isHospitalStaff() {
-      return hasRole('hospital_staff');
-    }
-    
-    function isTrafficPolice() {
-      return hasRole('traffic_police');
-    }
-    
-    function isProfessional() {
-      return isDriver() || isHospitalStaff() || isTrafficPolice();
-    }
-    
-    // Users collection - stores all user profiles and authentication data
+    // Users collection - stores patient profiles
     match /users/{userId} {
+      // Allow authenticated users to read/write their own documents only
       allow read, write: if isAuthenticated() && isOwner(userId);
-      
-      // User activities subcollection
-      match /activities/{activityId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
-      }
-      
-      // User notifications subcollection
-      match /notifications/{notificationId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
-        allow create: if isAuthenticated() && isProfessional();
-      }
-      
-      // User emergency contacts subcollection
-      match /emergencyContacts/{contactId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
-        allow read: if isProfessional(); // Emergency responders can read contacts
-      }
-      
-      // User medical information subcollection
-      match /medicalInfo/{infoId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
-        allow read: if isProfessional(); // Emergency responders can read medical info
-      }
     }
     
-    // Emergency requests collection (the app uses this collection name)
+    // Professional collection - stores professional profiles keyed by Auth UID
+    match /professional/{userId} {
+      // Allow authenticated users to read/write their own documents only
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Emergency requests collection
     match /emergency_requests/{requestId} {
-      allow read: if isAuthenticated() && (
-        // The patient who created the request can read it
-        (resource.data.patientId == request.auth.uid) ||
-        // Professionals can read
-        isProfessional() ||
-        // Assigned driver/hospital can read
-        resource.data.assignedDriverId == request.auth.uid ||
-        resource.data.assignedHospitalId == request.auth.uid
-      );
+      // Allow all authenticated users to read requests (patients and professionals)
+      allow read: if isAuthenticated();
       
-      // Patients can create their own emergency requests
-      allow create: if isAuthenticated() && isPatient() &&
+      // Only a patient (the logged-in user) can create their own request
+      allow create: if isAuthenticated() && 
         request.resource.data.patientId == request.auth.uid &&
-        request.resource.data.keys().hasAll(['patientId', 'emergencyType', 'severity', 'location', 'status', 'createdAt']) &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.createdAt == request.time;
+        request.resource.data.keys().hasAll(['patientId', 'emergencyType', 'severity', 'location', 'status']) &&
+        request.resource.data.status == 'pending';
       
-      // Updates allowed for patient owner or assigned professionals
-      allow update: if isAuthenticated() && (
-        (isPatient() && resource.data.patientId == request.auth.uid) ||
-        (isProfessional() && (
-          resource.data.assignedDriverId == request.auth.uid ||
-          resource.data.assignedHospitalId == request.auth.uid ||
-          isHospitalStaff() || isTrafficPolice()
-        ))
-      ) && request.resource.data.updatedAt == request.time;
-      
-      // Timeline subcollection
-      match /timeline/{timelineId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/emergency_requests/$(requestId)).data.patientId == request.auth.uid ||
-          isProfessional()
-        );
-        allow create: if isAuthenticated() && isProfessional();
-      }
-      
-      // Location updates subcollection
-      match /locationUpdates/{updateId} {
-        allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/emergency_requests/$(requestId)).data.patientId == request.auth.uid ||
-          isProfessional()
-        );
-        allow create: if isAuthenticated() && (
-          isDriver() || isHospitalStaff()
-        );
-      }
-    }
-    
-    // Existing emergencies collection rules (kept for backward compatibility)
-    match /emergencies/{emergencyId} {
-      allow read: if isAuthenticated() && (
-        isOwner(resource.data.patientId) ||
-        isProfessional() ||
-        resource.data.assignedDriverId == request.auth.uid ||
-        resource.data.assignedHospitalId == request.auth.uid
-      );
-      
-      allow create: if isAuthenticated() && isPatient() &&
-        request.resource.data.patientId == request.auth.uid &&
-        request.resource.data.keys().hasAll(['patientId', 'emergencyType', 'severity', 'location', 'status', 'createdAt']) &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.createdAt == request.time;
-      
-      allow update: if isAuthenticated() && (
-        (isPatient() && isOwner(resource.data.patientId)) ||
-        (isProfessional() && (
-          resource.data.assignedDriverId == request.auth.uid ||
-          resource.data.assignedHospitalId == request.auth.uid ||
-          isHospitalStaff() || isTrafficPolice()
-        ))
-      ) && request.resource.data.updatedAt == request.time;
-      
-      match /timeline/{timelineId} {
-        allow read: if isAuthenticated() && (
-          isOwner(get(/databases/$(database)/documents/emergencies/$(emergencyId)).data.patientId) ||
-          isProfessional()
-        );
-        allow create: if isAuthenticated() && isProfessional();
-      }
-      
-      match /locationUpdates/{updateId} {
-        allow read: if isAuthenticated() && (
-          isOwner(get(/databases/$(database)/documents/emergencies/$(emergencyId)).data.patientId) ||
-          isProfessional()
-        );
-        allow create: if isAuthenticated() && (
-          isDriver() || isHospitalStaff()
-        );
-      }
-    }
-    
-    // Ambulances collection
-    match /ambulances/{ambulanceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isDriver() || isHospitalStaff());
-      
-      match /locationHistory/{locationId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && isDriver();
-      }
-    }
-    
-    // Hospitals collection
-    match /hospitals/{hospitalId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isHospitalStaff();
-      
-      match /bedAvailability/{bedId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isHospitalStaff();
-      }
-      
-      match /staff/{staffId} {
-        allow read: if isAuthenticated() && isHospitalStaff();
-        allow write: if isAuthenticated() && isHospitalStaff();
-      }
-    }
-    
-    // Traffic control collection
-    match /trafficControl/{controlId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isTrafficPolice();
-      
-      match /routeClearance/{clearanceId} {
-        allow read: if isAuthenticated();
-        allow create, update: if isAuthenticated() && isTrafficPolice();
-      }
-    }
-    
-    // Analytics and reports collection
-    match /analytics/{analyticsId} {
-      allow read: if isAuthenticated() && isProfessional();
-      allow write: if isAuthenticated() && (isHospitalStaff() || isTrafficPolice());
-    }
-    
-    // System logs collection (for debugging and monitoring)
-    match /systemLogs/{logId} {
-      allow read: if isAuthenticated() && isProfessional();
-      allow create: if isAuthenticated();
-    }
-    
-    // App settings and configuration
-    match /appConfig/{configId} {
-      allow read: if isAuthenticated();
-      // Only system administrators can write (implement admin role if needed)
-    }
-    
-    // Chat/messaging between users and emergency responders
-    match /chats/{chatId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.uid in resource.data.participants ||
-        isProfessional()
-      );
-      
-      match /messages/{messageId} {
-        allow read: if isAuthenticated() && (
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
-          isProfessional()
-        );
-        allow create: if isAuthenticated() && (
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
-          isProfessional()
-        ) && request.resource.data.senderId == request.auth.uid &&
-        request.resource.data.timestamp == request.time;
-      }
-    }
-    
-    // Feedback and ratings collection
-    match /feedback/{feedbackId} {
-      allow read: if isAuthenticated() && isProfessional();
-      allow create: if isAuthenticated() && isPatient() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.createdAt == request.time;
-      allow update: if isAuthenticated() && isOwner(resource.data.userId);
-    }
-    
-    // Emergency hotlines and contacts
-    match /emergencyContacts/{contactId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isProfessional();
+      // Only the owning patient can update their request (keeps behavior simple and safe)
+      allow update: if isAuthenticated() && 
+        resource.data.patientId == request.auth.uid;
     }
   }
 }
