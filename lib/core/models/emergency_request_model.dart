@@ -119,6 +119,11 @@ class EmergencyRequest {
       'ambulanceId': ambulanceId,
       'status': status.toString().split('.').last,
       'emergencyType': emergencyType.toString().split('.').last,
+      'severity': priority, // Map priority to severity for Firestore rules
+      'location': {
+        'pickup': pickupLocation,
+        'hospital': hospitalLocation,
+      },
       'description': description,
       'pickupLocation': pickupLocation,
       'hospitalLocation': hospitalLocation,
@@ -126,6 +131,7 @@ class EmergencyRequest {
       'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null,
       'pickedUpAt': pickedUpAt != null ? Timestamp.fromDate(pickedUpAt!) : null,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
       'notes': notes,
       'enRouteAt': enRouteAt != null ? Timestamp.fromDate(enRouteAt!) : null,
       'driverPhone': driverPhone,

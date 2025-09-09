@@ -37,34 +37,9 @@ service cloud.firestore {
       return isDriver() || isHospitalStaff() || isTrafficPolice();
     }
     
-    // Patients collection - stores patient profiles and medical data
-    match /patients/{patientId} {
-      allow read, write: if isAuthenticated() && isOwner(patientId);
-      allow read: if isProfessional();
-    }
-    
     // Users collection - stores all user profiles and authentication data
     match /users/{userId} {
-      allow read: if isAuthenticated() && (
-        isOwner(userId) || 
-        isProfessional() ||
-        // Allow emergency responders to read patient data during emergencies
-        (exists(/databases/$(database)/documents/emergencies/{emergencyId}) &&
-         get(/databases/$(database)/documents/emergencies/{emergencyId}).data.patientId == userId)
-      );
-      
-      allow create: if isAuthenticated() && isOwner(userId) &&
-        // Validate required fields based on role
-        request.resource.data.keys().hasAll(['role', 'createdAt', 'updatedAt']) &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
-      
-      allow update: if isAuthenticated() && isOwner(userId) &&
-        request.resource.data.updatedAt == request.time &&
-        // Don't allow role changes after creation
-        request.resource.data.role == resource.data.role;
-      
-      allow delete: if isAuthenticated() && isOwner(userId);
+      allow read, write: if isAuthenticated() && isOwner(userId);
       
       // User activities subcollection
       match /activities/{activityId} {

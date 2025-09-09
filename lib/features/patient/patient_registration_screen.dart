@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/models/patient_model.dart';
+import '../../core/services/patient_firestore_service.dart';
+import '../../core/services/user_service.dart';
 
 class PatientRegistrationScreen extends StatefulWidget {
   const PatientRegistrationScreen({Key? key}) : super(key: key);
@@ -19,12 +23,21 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
   final _medicalConditionsController = TextEditingController();
   final _allergiesController = TextEditingController();
   final _medicationsController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   String? _selectedGender;
   String? _selectedBloodGroup;
   DateTime? _selectedDate;
   bool _hasInsurance = false;
   bool _agreeToTerms = false;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final PatientFirestoreService _firestoreService = PatientFirestoreService();
+  final UserService _userService = Get.find<UserService>();
 
   final List<String> _genders = ['Male', 'Female', 'Other'];
   final List<String> _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -40,6 +53,8 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
     _medicalConditionsController.dispose();
     _allergiesController.dispose();
     _medicationsController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -192,6 +207,54 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
                         child: _buildDateField(),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextFormField(
+                    controller: _passwordController,
+                    label: 'Password',
+                    hint: 'Enter a strong password',
+                    obscureText: _obscurePassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextFormField(
+                    controller: _confirmPasswordController,
+                    label: 'Confirm Password',
+                    hint: 'Re-enter your password',
+                    obscureText: _obscureConfirmPassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   _buildTextFormField(
@@ -377,7 +440,7 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _handleRegistration,
+                  onPressed: _isLoading ? null : _handleRegistration,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF5252),
                     shape: RoundedRectangleBorder(
@@ -385,14 +448,23 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Complete Registration',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Complete Registration',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
 
@@ -460,6 +532,8 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
     required String hint,
     TextInputType? keyboardType,
     int maxLines = 1,
+    bool obscureText = false,
+    Widget? suffixIcon,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -478,6 +552,7 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
+          obscureText: obscureText,
           validator: validator,
           decoration: InputDecoration(
             hintText: hint,
@@ -489,6 +564,7 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
               borderSide: BorderSide.none,
             ),
             contentPadding: const EdgeInsets.all(16),
+            suffixIcon: suffixIcon,
           ),
         ),
       ],
@@ -607,7 +683,7 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
     }
   }
 
-  void _handleRegistration() {
+  Future<void> _handleRegistration() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -632,6 +708,16 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
       return;
     }
 
+    if (_selectedBloodGroup == null) {
+      Get.snackbar(
+        'Error',
+        'Please select your blood group',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
     if (!_agreeToTerms) {
       Get.snackbar(
         'Error',
@@ -642,16 +728,110 @@ class _PatientRegistrationScreenState extends State<PatientRegistrationScreen> {
       return;
     }
 
-    // Show success message
-    Get.snackbar(
-      'Success',
-      'Registration completed successfully! Welcome to ResQRoute',
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
-    );
+    setState(() {
+      _isLoading = true;
+    });
 
-    // Navigate to user dashboard
-    Get.offAllNamed('/user-dashboard');
+    try {
+      // Create Firebase user account
+      print('Creating Firebase user account...');
+      final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final User? user = userCredential.user;
+      if (user == null) {
+        throw Exception('Failed to create user account');
+      }
+
+      print('User account created with ID: ${user.uid}');
+
+      // Create patient model
+      final PatientModel patient = PatientModel(
+        id: user.uid,
+        email: _emailController.text.trim(),
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+        dateOfBirth: _selectedDate!,
+        gender: _selectedGender!,
+        bloodGroup: _selectedBloodGroup!,
+        medicalConditions: _medicalConditionsController.text.trim().isEmpty 
+            ? null : _medicalConditionsController.text.trim(),
+        allergies: _allergiesController.text.trim().isEmpty 
+            ? null : _allergiesController.text.trim(),
+        medications: _medicationsController.text.trim().isEmpty 
+            ? null : _medicationsController.text.trim(),
+        emergencyContactName: _emergencyContactController.text.trim(),
+        emergencyContactPhone: _emergencyPhoneController.text.trim(),
+        emergencyContactRelation: 'Emergency Contact',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        isActive: true,
+      );
+
+      // Save patient data to Firestore
+      print('Saving patient data to Firestore...');
+      print('Patient ID: ${patient.id}');
+      print('Patient data: ${patient.toJson()}');
+      await _firestoreService.savePatientData(patient);
+      print('Patient data saved successfully to users collection');
+
+      // Update user service with new patient data
+      await _userService.refreshPatientData();
+      print('UserService refreshed with new patient data');
+
+      // Show success message
+      Get.snackbar(
+        'Success',
+        'Registration completed successfully! Welcome to ResQRoute',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+
+      // Navigate to user dashboard
+      Get.offAllNamed('/user-dashboard');
+
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'weak-password':
+          errorMessage = 'The password provided is too weak.';
+          break;
+        case 'email-already-in-use':
+          errorMessage = 'An account already exists for this email.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        default:
+          errorMessage = 'Registration failed: ${e.message}';
+      }
+      
+      Get.snackbar(
+        'Registration Failed',
+        errorMessage,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      print('Registration error: $e');
+      Get.snackbar(
+        'Registration Failed',
+        'An unexpected error occurred. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }

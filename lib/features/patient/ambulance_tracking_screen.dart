@@ -592,7 +592,7 @@ class _AmbulanceTrackingScreenState extends State<AmbulanceTrackingScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _buildDetailRow('Emergency Type', _currentRequest?.emergencyType ?? _requestData['emergencyType']),
+                  _buildDetailRow('Emergency Type', _currentRequest?.emergencyType.toString().split('.').last ?? _requestData['emergencyType']),
                   _buildDetailRow('Severity', _currentRequest?.priority.toString().split('.').last.toUpperCase() ?? _requestData['severity']),
                   _buildDetailRow('Patient Name', _currentRequest?.patientName ?? _requestData['patientName']),
                   _buildDetailRow('Location', _currentRequest?.pickupLocation ?? _requestData['location']),

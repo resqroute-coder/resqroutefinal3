@@ -16,8 +16,23 @@ class PatientFirestoreService {
     try {
       print('PatientFirestoreService: Saving to /users/${patient.id}');
       print('Data to save: ${patient.toJson()}');
-      await _usersCollection.doc(patient.id).set(patient.toJson());
-      print('PatientFirestoreService: Data saved successfully');
+      
+      // Use set with merge to ensure data is saved
+      await _usersCollection.doc(patient.id).set(
+        patient.toJson(),
+        SetOptions(merge: true)
+      );
+      
+      print('PatientFirestoreService: Data saved successfully to users collection');
+      
+      // Verify the data was saved by reading it back
+      final savedDoc = await _usersCollection.doc(patient.id).get();
+      if (savedDoc.exists) {
+        print('PatientFirestoreService: Verification successful - document exists');
+        print('Saved data: ${savedDoc.data()}');
+      } else {
+        throw Exception('Data was not saved properly - document does not exist');
+      }
     } catch (e) {
       print('PatientFirestoreService: Error saving data: $e');
       throw Exception('Failed to save patient data: ${e.toString()}');

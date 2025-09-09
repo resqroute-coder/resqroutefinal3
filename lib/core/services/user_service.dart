@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +14,9 @@ class UserService extends GetxController {
   // Patient data observables
   final Rx<PatientModel?> _currentPatient = Rx<PatientModel?>(null);
   final RxBool _isLoggedIn = false.obs;
+  
+  // Stream subscription for real-time updates
+  StreamSubscription<PatientModel?>? _patientDataSubscription;
   
   // App preferences
   final RxBool _notificationsEnabled = true.obs;
@@ -52,24 +56,63 @@ class UserService extends GetxController {
     _initializeAuthListener();
     loadUserData();
   }
+  
+  @override
+  void onClose() {
+    _patientDataSubscription?.cancel();
+    super.onClose();
+  }
 
   // Initialize Firebase Auth listener
   void _initializeAuthListener() {
     _auth.authStateChanges().listen((User? user) async {
       if (user != null) {
-        await _loadPatientData(user.uid);
+        await _setupPatientDataStream(user.uid);
         _isLoggedIn.value = true;
       } else {
+        _patientDataSubscription?.cancel();
         _currentPatient.value = null;
         _isLoggedIn.value = false;
       }
     });
   }
 
-  // Load patient data from Firestore
-  Future<void> _loadPatientData(String userId) async {
+  // Setup real-time patient data stream
+  Future<void> _setupPatientDataStream(String userId) async {
     try {
-      print('UserService: Loading patient data for user: $userId');
+      print('UserService: Setting up real-time data stream for user: $userId');
+      
+      // Cancel existing subscription
+      _patientDataSubscription?.cancel();
+      
+      // Setup new stream subscription for real-time updates
+      _patientDataSubscription = _firestoreService.streamPatientData(userId).listen(
+        (PatientModel? patient) {
+          if (patient != null) {
+            print('UserService: Real-time patient data updated: ${patient.name}');
+            _currentPatient.value = patient;
+          } else {
+            print('UserService: No patient data found for user: $userId');
+            _currentPatient.value = null;
+          }
+        },
+        onError: (error) {
+          print('UserService: Error in patient data stream: $error');
+          // Fallback to one-time load if stream fails
+          _loadPatientDataFallback(userId);
+        },
+      );
+    } catch (e) {
+      print('UserService: Error setting up patient data stream: $e');
+      // Fallback to one-time load
+      await _loadPatientDataFallback(userId);
+    }
+  }
+  
+  // Fallback method for loading patient data (one-time)
+  Future<void> _loadPatientDataFallback(String userId) async {
+    try {
+      print('UserService: Loading patient data (fallback) for user: $userId');
       final patient = await _firestoreService.getPatientData(userId);
       if (patient != null) {
         print('UserService: Patient data loaded successfully: ${patient.name}');
@@ -96,7 +139,7 @@ class UserService extends GetxController {
       // Check if user is logged in with Firebase
       final user = _auth.currentUser;
       if (user != null) {
-        await _loadPatientData(user.uid);
+        await _setupPatientDataStream(user.uid);
         _isLoggedIn.value = true;
       }
     } catch (e) {
@@ -134,7 +177,8 @@ class UserService extends GetxController {
     
     if (updates.isNotEmpty) {
       await _firestoreService.updateCurrentPatientData(updates);
-      await _loadPatientData(_currentPatient.value!.id);
+      // Real-time stream will automatically update the data
+      print('UserService: Profile updated, real-time stream will reflect changes');
     }
   }
 
@@ -161,7 +205,8 @@ class UserService extends GetxController {
     
     if (updates.isNotEmpty) {
       await _firestoreService.updateCurrentPatientData(updates);
-      await _loadPatientData(_currentPatient.value!.id);
+      // Real-time stream will automatically update the data
+      print('UserService: Medical info updated, real-time stream will reflect changes');
     }
   }
 
@@ -187,7 +232,7 @@ class UserService extends GetxController {
       );
       
       if (userCredential.user != null) {
-        await _loadPatientData(userCredential.user!.uid);
+        await _setupPatientDataStream(userCredential.user!.uid);
         _isLoggedIn.value = true;
       }
     } on FirebaseAuthException catch (e) {
@@ -205,7 +250,7 @@ class UserService extends GetxController {
         if (currentUser != null) {
           // User is authenticated despite the error, load their data
           try {
-            await _loadPatientData(currentUser.uid);
+            await _setupPatientDataStream(currentUser.uid);
             _isLoggedIn.value = true;
             return; // Success despite the error
           } catch (dataError) {
@@ -223,6 +268,9 @@ class UserService extends GetxController {
 
   // Logout user
   Future<void> logoutUser() async {
+    // Cancel real-time subscription
+    _patientDataSubscription?.cancel();
+    
     await _auth.signOut();
     _currentPatient.value = null;
     _isLoggedIn.value = false;
@@ -248,7 +296,16 @@ class UserService extends GetxController {
   Future<void> refreshPatientData() async {
     final user = _auth.currentUser;
     if (user != null) {
-      await _loadPatientData(user.uid);
+      // Re-setup the stream to get fresh data
+      await _setupPatientDataStream(user.uid);
+    }
+  }
+  
+  // Force reload patient data (one-time)
+  Future<void> forceReloadPatientData() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      await _loadPatientDataFallback(user.uid);
     }
   }
 }

@@ -9,6 +9,7 @@ import 'features/auth/splash_screen.dart';
 import 'features/auth/user_login_screen.dart';
 import 'features/auth/user_signup_screen.dart';
 import 'features/auth/professional_login_screen.dart';
+import 'features/patient/patient_registration_screen.dart';
 import 'features/patient/user_dashboard_screen.dart';
 import 'features/patient/service_history_screen.dart';
 import 'features/patient/emergency_contacts_screen.dart';
@@ -106,6 +107,7 @@ class ResQRouteApp extends StatelessWidget {
       getPages: [
         GetPage(name: '/user-login', page: () => const UserLoginScreen()),
         GetPage(name: '/user-signup', page: () => const UserSignupScreen()),
+        GetPage(name: '/patient-registration', page: () => const PatientRegistrationScreen()),
         GetPage(name: '/professional-login', page: () => const ProfessionalLoginScreen()),
         GetPage(name: '/user-dashboard', page: () => const UserDashboardScreen()),
         GetPage(name: '/service-history', page: () => const ServiceHistoryScreen()),

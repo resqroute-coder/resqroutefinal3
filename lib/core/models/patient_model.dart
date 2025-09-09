@@ -92,28 +92,19 @@ class PatientModel {
       'fullName': name,
       'phone': phone,
       'profilePicture': profileImageUrl,
-      'isActive': isActive,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
-      'dateOfBirth': dateOfBirth.toIso8601String(),
       'gender': gender,
       'bloodGroup': bloodGroup,
-      'address': address != null ? {
-        'street': address,
-        'city': '',
-        'state': '',
-        'pincode': '',
-        'coordinates': {
-          'latitude': 0.0,
-          'longitude': 0.0
-        }
-      } : null,
       'medicalConditions': medicalConditions,
       'allergies': allergies,
       'medications': medications,
       'emergencyContactName': emergencyContactName,
       'emergencyContactPhone': emergencyContactPhone,
       'emergencyContactRelation': emergencyContactRelation,
+      'profileImageUrl': profileImageUrl,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
+      'isActive': isActive,
+      'role': 'patient', // Add role field for Firestore rules
     };
   }
 

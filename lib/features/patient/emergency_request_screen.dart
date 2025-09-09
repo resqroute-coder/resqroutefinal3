@@ -100,6 +100,15 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
     if (_userService.userName.isNotEmpty) {
       _patientNameController.text = _userService.userName;
     }
+    if (_userService.userPhone.isNotEmpty) {
+      _phoneController.text = _userService.userPhone;
+    }
+    if (_userService.age > 0) {
+      _patientAgeController.text = _userService.age.toString();
+    }
+    if (_userService.gender.isNotEmpty) {
+      _selectedGender = _userService.gender;
+    }
     if (_userService.userLocation.isNotEmpty && _userService.userLocation != 'Location not available') {
       _locationController.text = _userService.userLocation;
     }
@@ -386,6 +395,13 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
                   controller: _patientNameController,
                   label: 'Patient Name',
                   hint: 'Enter patient\'s full name',
+                ),
+                const SizedBox(height: 16),
+                _buildTextFormField(
+                  controller: _phoneController,
+                  label: 'Phone Number',
+                  hint: 'Enter patient\'s phone number',
+                  keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -808,7 +824,7 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
       final requestId = await _emergencyService.createEmergencyRequest(
         patientId: _userService.userId,
         patientName: _patientNameController.text.trim(),
-        patientPhone: _userService.userPhone.isNotEmpty ? _userService.userPhone : '9876543210',
+        patientPhone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : _userService.userPhone,
         emergencyType: emergencyType,
         description: _descriptionController.text.trim(),
         pickupLocation: _locationController.text.trim(),

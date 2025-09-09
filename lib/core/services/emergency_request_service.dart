@@ -54,14 +54,6 @@ class EmergencyRequestService extends GetxService {
           .doc(requestId)
           .set(request.toJson());
 
-      // Add to patient's request history
-      await _firestore
-          .collection('patients')
-          .doc(patientId)
-          .collection('requests')
-          .doc(requestId)
-          .set(request.toJson());
-
       return requestId;
     } catch (e) {
       print('Error creating emergency request: $e');
