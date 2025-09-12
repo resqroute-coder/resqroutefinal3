@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/emergency_request_model.dart';
+import 'notification_service.dart';
 
 class EmergencyRequestService extends GetxService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final NotificationService _notificationService;
   
   // Observable lists for real-time updates
   final RxList<EmergencyRequest> _pendingRequests = <EmergencyRequest>[].obs;
@@ -18,6 +20,7 @@ class EmergencyRequestService extends GetxService {
   @override
   void onInit() {
     super.onInit();
+    _notificationService = Get.find<NotificationService>();
     _listenToRequests();
   }
 
@@ -53,6 +56,23 @@ class EmergencyRequestService extends GetxService {
           .collection('emergency_requests')
           .doc(requestId)
           .set(request.toJson());
+
+      // Send meaningful notification to patient with simulation
+      await _notificationService.sendEmergencyNotification(
+        userId: patientId,
+        title: 'Emergency Request Confirmed',
+        message: 'Your ${emergencyType.name.replaceAll('_', ' ')} emergency request has been received and ambulance is being dispatched to $pickupLocation.',
+        type: NotificationType.emergency,
+        data: {
+          'requestId': requestId, 
+          'emergencyType': emergencyType.name,
+          'location': pickupLocation,
+          'status': 'confirmed',
+        },
+      );
+
+      // Start the realistic emergency flow simulation
+      await _notificationService.simulateEmergencyNotifications(requestId, patientName: patientName);
 
       return requestId;
     } catch (e) {
@@ -90,9 +110,111 @@ class EmergencyRequestService extends GetxService {
           .doc(requestId)
           .set(updatedRequest);
 
+      // Get patient ID from the request
+      final requestDoc = await _firestore
+          .collection('emergency_requests')
+          .doc(requestId)
+          .get();
+      
+      if (requestDoc.exists) {
+        final patientId = requestDoc.data()?['patientId'];
+        if (patientId != null) {
+          // Notify patient about ambulance assignment with detailed context
+          await _notificationService.sendEmergencyNotification(
+            userId: patientId,
+            title: 'Ambulance Assigned',
+            message: 'Ambulance $ambulanceId has been assigned to your emergency request. Driver $driverName is preparing to depart and will contact you shortly.',
+            type: NotificationType.ambulance,
+            data: {
+              'requestId': requestId,
+              'driverId': driverId,
+              'driverName': driverName,
+              'ambulanceId': ambulanceId,
+              'status': 'assigned',
+              'driverPhone': '+91 98765 43210',
+            },
+          );
+        }
+        
+        // Notify driver about new assignment with actionable information
+        final emergencyType = requestDoc.data()?['emergencyType'] ?? 'Emergency';
+        final patientName = requestDoc.data()?['patientName'] ?? 'Patient';
+        final location = requestDoc.data()?['pickupLocation'] ?? 'Location';
+        
+        await _notificationService.sendEmergencyNotification(
+          userId: driverId,
+          title: 'URGENT: New Emergency Assignment',
+          message: 'You have been assigned to $emergencyType emergency for $patientName at $location. Please proceed immediately to ambulance $ambulanceId.',
+          type: NotificationType.emergency,
+          data: {
+            'requestId': requestId,
+            'patientId': patientId,
+            'emergencyType': emergencyType,
+            'patientName': patientName,
+            'location': location,
+            'ambulanceId': ambulanceId,
+            'priority': 'urgent',
+            'action': 'proceed_immediately',
+          },
+        );
+      }
+
       return true;
     } catch (e) {
       print('Error accepting request: $e');
+      return false;
+    }
+  }
+
+  // Decline a request (driver)
+  Future<bool> declineRequest({
+    required String requestId,
+    required String driverId,
+    required String driverName,
+  }) async {
+    try {
+      // Add decline information to the request
+      final declineData = {
+        'declinedBy': FieldValue.arrayUnion([{
+          'driverId': driverId,
+          'driverName': driverName,
+          'declinedAt': Timestamp.fromDate(DateTime.now()),
+        }]),
+        'lastDeclinedAt': Timestamp.fromDate(DateTime.now()),
+      };
+
+      await _firestore
+          .collection('emergency_requests')
+          .doc(requestId)
+          .update(declineData);
+
+      // Get request details for notification
+      final requestDoc = await _firestore
+          .collection('emergency_requests')
+          .doc(requestId)
+          .get();
+      
+      if (requestDoc.exists) {
+        final patientId = requestDoc.data()?['patientId'];
+        if (patientId != null) {
+          // Notify patient that request is being reassigned
+          await _notificationService.sendEmergencyNotification(
+            userId: patientId,
+            title: 'Reassigning Ambulance',
+            message: 'Your emergency request is being reassigned to another available ambulance. Please wait while we find the nearest driver.',
+            type: NotificationType.update,
+            data: {
+              'requestId': requestId,
+              'status': 'reassigning',
+              'action': 'finding_driver',
+            },
+          );
+        }
+      }
+
+      return true;
+    } catch (e) {
+      print('Error declining request: $e');
       return false;
     }
   }
@@ -132,6 +254,9 @@ class EmergencyRequestService extends GetxService {
           .doc(requestId)
           .update(updateData);
 
+      // Send status update notifications
+      await _sendStatusUpdateNotification(requestId, status);
+
       return true;
     } catch (e) {
       print('Error updating request status: $e');
@@ -139,17 +264,136 @@ class EmergencyRequestService extends GetxService {
     }
   }
 
-  // Get pending requests for drivers
+  Future<void> _sendStatusUpdateNotification(String requestId, RequestStatus status) async {
+    try {
+      // Get request details
+      final requestDoc = await _firestore
+          .collection('emergency_requests')
+          .doc(requestId)
+          .get();
+      
+      if (!requestDoc.exists) return;
+      
+      final data = requestDoc.data()!;
+      final patientId = data['patientId'];
+      final driverId = data['driverId'];
+      final driverName = data['driverName'] ?? 'Driver';
+      
+      String title = '';
+      String message = '';
+      NotificationType notificationType = NotificationType.update;
+      
+      switch (status) {
+        case RequestStatus.enRoute:
+          title = 'Driver En Route';
+          message = 'Driver $driverName is on the way to your location. ETA: 8 minutes. Please stay calm and prepare for pickup.';
+          notificationType = NotificationType.update;
+          break;
+        case RequestStatus.pickedUp:
+          title = 'Patient Picked Up - En Route to Hospital';
+          message = 'You have been safely picked up by $driverName and are now heading to the hospital. Medical assistance is being provided during transport.';
+          notificationType = NotificationType.ambulance;
+          break;
+        case RequestStatus.completed:
+          title = 'Safely Arrived at Hospital';
+          message = 'You have safely arrived at the hospital. Emergency request completed successfully. Medical team is ready to assist you.';
+          notificationType = NotificationType.info;
+          break;
+        default:
+          return;
+      }
+      
+      // Notify patient
+      if (patientId != null) {
+        await _notificationService.sendEmergencyNotification(
+          userId: patientId,
+          title: title,
+          message: message,
+          type: notificationType,
+          data: {
+            'requestId': requestId,
+            'status': status.name,
+          },
+        );
+      }
+      
+      // Notify driver about status change with contextual information
+      if (driverId != null) {
+        String driverTitle = '';
+        String driverMessage = '';
+        
+        switch (status) {
+          case RequestStatus.enRoute:
+            driverTitle = 'En Route to Patient';
+            driverMessage = 'You are now en route to pick up the patient. Drive safely and follow emergency protocols.';
+            break;
+          case RequestStatus.pickedUp:
+            driverTitle = 'Patient Picked Up Successfully';
+            driverMessage = 'Patient has been picked up. Proceed to hospital immediately. Monitor patient condition during transport.';
+            break;
+          case RequestStatus.completed:
+            driverTitle = 'Emergency Trip Completed';
+            driverMessage = 'Patient delivered safely to hospital. Trip completed successfully. Well done!';
+            break;
+          default:
+            driverTitle = 'Request Status Updated';
+            driverMessage = 'Emergency request $requestId status: ${status.name}';
+        }
+        
+        await _notificationService.sendEmergencyNotification(
+          userId: driverId,
+          title: driverTitle,
+          message: driverMessage,
+          type: NotificationType.update,
+          data: {
+            'requestId': requestId,
+            'status': status.name,
+            'instruction': status == RequestStatus.enRoute ? 'drive_safely' : 
+                         status == RequestStatus.pickedUp ? 'monitor_patient' : 
+                         status == RequestStatus.completed ? 'trip_completed' : 'status_updated',
+          },
+        );
+      }
+    } catch (e) {
+      print('Error sending status update notification: $e');
+    }
+  }
+
+  // Get pending requests stream
   Stream<List<EmergencyRequest>> getPendingRequestsStream() {
     return _firestore
         .collection('emergency_requests')
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => EmergencyRequest.fromJson(doc.data()))
-          .toList();
+      final requests = snapshot.docs.map<EmergencyRequest>((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return EmergencyRequest.fromJson(data);
+      }).toList();
+      
+      // Sort in memory instead of using Firestore orderBy
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
+    });
+  }
+
+  // Get driver active trips stream
+  Stream<List<EmergencyRequest>> getDriverActiveTripsStream() {
+    return _firestore
+        .collection('emergency_requests')
+        .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+        .snapshots()
+        .map((snapshot) {
+      final requests = snapshot.docs.map<EmergencyRequest>((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return EmergencyRequest.fromJson(data);
+      }).toList();
+      
+      // Sort in memory instead of using Firestore orderBy
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
     });
   }
 
@@ -159,12 +403,17 @@ class EmergencyRequestService extends GetxService {
         .collection('emergency_requests')
         .where('driverId', isEqualTo: driverId)
         .where('status', whereIn: ['accepted', 'enRoute', 'pickedUp'])
-        .orderBy('acceptedAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => EmergencyRequest.fromJson(doc.data()))
-          .toList();
+      final requests = snapshot.docs.map<EmergencyRequest>((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return EmergencyRequest.fromJson(data);
+      }).toList();
+      
+      // Sort in memory by acceptedAt date
+      requests.sort((a, b) => (b.acceptedAt ?? DateTime.now()).compareTo(a.acceptedAt ?? DateTime.now()));
+      return requests;
     });
   }
 
@@ -173,12 +422,17 @@ class EmergencyRequestService extends GetxService {
     return _firestore
         .collection('emergency_requests')
         .where('patientId', isEqualTo: patientId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => EmergencyRequest.fromJson(doc.data()))
-          .toList();
+      final requests = snapshot.docs.map<EmergencyRequest>((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return EmergencyRequest.fromJson(data);
+      }).toList();
+      
+      // Sort in memory by createdAt date
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
     });
   }
 

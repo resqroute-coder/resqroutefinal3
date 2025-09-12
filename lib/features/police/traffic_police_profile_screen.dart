@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/professional_service.dart';
 
 class TrafficPoliceProfileScreen extends StatefulWidget {
   const TrafficPoliceProfileScreen({Key? key}) : super(key: key);
@@ -9,6 +10,52 @@ class TrafficPoliceProfileScreen extends StatefulWidget {
 }
 
 class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen> {
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
+  bool _isEditing = false;
+  
+  // Additional traffic police-specific fields
+  String _badgeNumber = '';
+  String _rank = '';
+  String _stationName = '';
+  String _sector = '';
+  String _shift = '';
+  String _vehicleNumber = '';
+  String _jurisdiction = '';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadAdditionalPoliceData();
+  }
+  
+  void _loadAdditionalPoliceData() {
+    // Load additional traffic police data from additionalData field
+    final professional = _professionalService.currentProfessional;
+    if (professional?.additionalData != null) {
+      final additionalData = professional!.additionalData!;
+      setState(() {
+        _badgeNumber = additionalData['badgeNumber'] ?? 'OFF001';
+        _rank = additionalData['rank'] ?? 'Senior Officer';
+        _stationName = additionalData['stationName'] ?? 'Sector 18 Traffic Police Station';
+        _sector = additionalData['sector'] ?? 'Sector 18-22';
+        _shift = additionalData['shift'] ?? 'Day Shift (8AM-8PM)';
+        _vehicleNumber = additionalData['vehicleNumber'] ?? 'TPC-001';
+        _jurisdiction = additionalData['jurisdiction'] ?? 'Highway & City Roads';
+      });
+    } else {
+      // Set default values if no additional data
+      setState(() {
+        _badgeNumber = 'OFF001';
+        _rank = 'Senior Officer';
+        _stationName = 'Sector 18 Traffic Police Station';
+        _sector = 'Sector 18-22';
+        _shift = 'Day Shift (8AM-8PM)';
+        _vehicleNumber = 'TPC-001';
+        _jurisdiction = 'Highway & City Roads';
+      });
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,11 +77,26 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, color: Colors.black),
+            icon: Icon(_isEditing ? Icons.save : Icons.edit, color: Colors.black),
             onPressed: () {
-              // Handle edit profile
+              if (_isEditing) {
+                _saveProfile();
+              } else {
+                setState(() {
+                  _isEditing = true;
+                });
+              }
             },
           ),
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.black),
+              onPressed: () {
+                setState(() {
+                  _isEditing = false;
+                });
+              },
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -87,14 +149,14 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
                   const SizedBox(height: 16),
                   
                   // Officer Name
-                  const Text(
-                    'Officer Rajesh Singh',
-                    style: TextStyle(
+                  Obx(() => Text(
+                    _professionalService.professionalName,
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
-                  ),
+                  )),
                   
                   const SizedBox(height: 8),
                   
@@ -110,9 +172,9 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
                   const SizedBox(height: 4),
                   
                   // Badge Number
-                  const Text(
-                    'Badge: OFF001',
-                    style: TextStyle(
+                  Text(
+                    'Badge: $_badgeNumber',
+                    style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
                     ),
@@ -201,30 +263,67 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
               ),
               child: Column(
                 children: [
-                  _buildProfileField(
+                  Obx(() => _buildProfileField(
                     'Full Name',
-                    'Officer Rajesh Singh',
+                    _professionalService.professionalName,
                     Icons.person,
-                  ),
+                  )),
+                  Obx(() => _buildProfileField(
+                    'Employee ID',
+                    _professionalService.employeeId,
+                    Icons.badge,
+                  )),
+                  Obx(() => _buildProfileField(
+                    'Email',
+                    _professionalService.professionalEmail,
+                    Icons.email,
+                  )),
+                  Obx(() => _buildProfileField(
+                    'Phone',
+                    _professionalService.professionalPhone,
+                    Icons.phone,
+                  )),
                   _buildProfileField(
                     'Badge Number',
-                    'OFF001',
-                    Icons.badge,
+                    _badgeNumber,
+                    Icons.security,
+                    onTap: _isEditing ? () => _editField('Badge Number', _badgeNumber, (value) => setState(() => _badgeNumber = value)) : null,
                   ),
                   _buildProfileField(
-                    'Department',
-                    'Traffic Control Unit',
-                    Icons.local_police,
+                    'Rank',
+                    _rank,
+                    Icons.military_tech,
+                    onTap: _isEditing ? () => _editField('Rank', _rank, (value) => setState(() => _rank = value)) : null,
                   ),
                   _buildProfileField(
                     'Station',
-                    'Sector 18 Traffic Police Station',
+                    _stationName,
                     Icons.location_city,
+                    onTap: _isEditing ? () => _editField('Station', _stationName, (value) => setState(() => _stationName = value)) : null,
                   ),
                   _buildProfileField(
-                    'Contact',
-                    '+91 98765 43210',
-                    Icons.phone,
+                    'Sector',
+                    _sector,
+                    Icons.map,
+                    onTap: _isEditing ? () => _editField('Sector', _sector, (value) => setState(() => _sector = value)) : null,
+                  ),
+                  _buildProfileField(
+                    'Shift',
+                    _shift,
+                    Icons.schedule,
+                    onTap: _isEditing ? () => _editField('Shift', _shift, (value) => setState(() => _shift = value)) : null,
+                  ),
+                  _buildProfileField(
+                    'Vehicle Number',
+                    _vehicleNumber,
+                    Icons.local_shipping,
+                    onTap: _isEditing ? () => _editField('Vehicle Number', _vehicleNumber, (value) => setState(() => _vehicleNumber = value)) : null,
+                  ),
+                  _buildProfileField(
+                    'Jurisdiction',
+                    _jurisdiction,
+                    Icons.gavel,
+                    onTap: _isEditing ? () => _editField('Jurisdiction', _jurisdiction, (value) => setState(() => _jurisdiction = value)) : null,
                     isLast: true,
                   ),
                 ],
@@ -350,47 +449,57 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
     String value,
     IconData icon, {
     bool isLast = false,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        border: isLast ? null : const Border(
-          bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          border: isLast ? null : const Border(
+            bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: Colors.grey,
-            size: 20,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: Colors.grey,
+              size: 20,
             ),
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                _isEditing ? Icons.edit : Icons.chevron_right,
+                color: _isEditing ? const Color(0xFF4CAF50) : Colors.grey,
+                size: 20,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -526,6 +635,83 @@ class _TrafficPoliceProfileScreenState extends State<TrafficPoliceProfileScreen>
       },
       activeColor: const Color(0xFFFF5252),
     );
+  }
+
+  void _editField(String fieldName, String currentValue, Function(String) onSave) {
+    final TextEditingController controller = TextEditingController(text: currentValue);
+    
+    Get.dialog(
+      AlertDialog(
+        title: Text('Edit $fieldName'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: fieldName,
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: fieldName.contains('Address') || fieldName.contains('Jurisdiction') ? 3 : 1,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                onSave(controller.text.trim());
+                Get.back();
+                Get.snackbar(
+                  'Success',
+                  '$fieldName updated successfully',
+                  backgroundColor: const Color(0xFF4CAF50),
+                  colorText: Colors.white,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveProfile() async {
+    try {
+      // Save additional traffic police data to Firestore
+      await _professionalService.updateAdditionalData({
+        'badgeNumber': _badgeNumber,
+        'rank': _rank,
+        'stationName': _stationName,
+        'sector': _sector,
+        'shift': _shift,
+        'vehicleNumber': _vehicleNumber,
+        'jurisdiction': _jurisdiction,
+      });
+      
+      setState(() {
+        _isEditing = false;
+      });
+      
+      Get.snackbar(
+        'Profile Saved',
+        'Traffic police profile has been updated successfully',
+        backgroundColor: const Color(0xFF4CAF50),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to save profile: $e',
+        backgroundColor: const Color(0xFFFF5252),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   void _showSignOutDialog() {

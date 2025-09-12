@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/professional_service.dart';
+import '../../shared/widgets/ambulance_map_widget.dart';
+import '../../shared/widgets/ambulance_simulator_widget.dart';
 
 class HospitalDashboardScreen extends StatefulWidget {
   const HospitalDashboardScreen({Key? key}) : super(key: key);
@@ -9,32 +12,23 @@ class HospitalDashboardScreen extends StatefulWidget {
 }
 
 class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
-  final List<IncomingPatient> _incomingPatients = [
-    IncomingPatient(
-      name: 'Ramesh Gupta',
-      condition: 'Cardiac Emergency',
-      ambulanceId: 'UP-16-AB-1234',
-      driverName: 'Rajesh Kumar',
-      eta: '8 mins',
-      priority: 'critical',
-    ),
-    IncomingPatient(
-      name: 'Priya Sharma',
-      condition: 'Accident Victim',
-      ambulanceId: 'UP-16-AB-5678',
-      driverName: 'Mohammed Ali',
-      eta: '15 mins',
-      priority: 'high',
-    ),
-    IncomingPatient(
-      name: 'Sunil Yadav',
-      condition: 'Respiratory Distress',
-      ambulanceId: 'UP-16-AB-9012',
-      driverName: 'Sunita Devi',
-      eta: '22 mins',
-      priority: 'medium',
-    ),
-  ];
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
+  Map<String, dynamic> _hospitalMetrics = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHospitalMetrics();
+  }
+
+  Future<void> _loadHospitalMetrics() async {
+    final metrics = await _professionalService.getHospitalMetrics();
+    if (mounted) {
+      setState(() {
+        _hospitalMetrics = metrics;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,11 +37,14 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFFF5252),
         elevation: 0,
-        leading: const Icon(Icons.local_hospital, color: Colors.white),
-        title: const Column(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Get.back(),
+        ),
+        title: Obx(() => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Hospital Dashboard',
               style: TextStyle(
                 color: Colors.white,
@@ -56,15 +53,15 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
               ),
             ),
             Text(
-              'Max Super Specialty Hospital',
-              style: TextStyle(
+              _professionalService.professionalName,
+              style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
               ),
             ),
           ],
-        ),
+        )),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications, color: Colors.white),
@@ -93,7 +90,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                 children: [
                   Expanded(
                     child: _buildMetricCard(
-                      '23',
+                      _hospitalMetrics['availableBeds']?.toString() ?? '0',
                       'Available Beds',
                       Icons.bed,
                       const Color(0xFF4CAF50),
@@ -102,7 +99,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMetricCard(
-                      '8',
+                      _hospitalMetrics['activeAmbulances']?.toString() ?? '0',
                       'Active Ambulances',
                       Icons.local_shipping,
                       const Color(0xFF2196F3),
@@ -120,7 +117,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                 children: [
                   Expanded(
                     child: _buildMetricCard(
-                      '5',
+                      _hospitalMetrics['incomingPatients']?.toString() ?? '0',
                       'Incoming Patients',
                       Icons.person_add,
                       const Color(0xFFFF9800),
@@ -129,11 +126,49 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMetricCard(
-                      '2',
+                      _hospitalMetrics['criticalCases']?.toString() ?? '0',
                       'Critical Cases',
                       Icons.warning,
                       const Color(0xFFFF5252),
                     ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Ambulance Tracking Map
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Live Ambulance Tracking',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.fullscreen, color: Color(0xFFFF5252)),
+                        onPressed: () {
+                          Get.toNamed('/hospital-live-tracking');
+                        },
+                        tooltip: 'Full Screen Map',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const AmbulanceMapWidget(
+                    userType: 'hospital',
+                    height: 250,
+                    showControls: true,
                   ),
                 ],
               ),
@@ -174,15 +209,69 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
             const SizedBox(height: 12),
             
             // Incoming Patients List
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _incomingPatients.length,
-              itemBuilder: (context, index) {
-                return _buildPatientCard(_incomingPatients[index]);
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _professionalService.getIncomingPatientsStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFFF5252),
+                      ),
+                    ),
+                  );
+                }
+                
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 48,
+                          color: Colors.grey.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No Incoming Patients',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Incoming emergency patients will appear here',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: snapshot.data!.length,
+                  itemBuilder: (context, index) {
+                    return _buildPatientCard(snapshot.data![index]);
+                  },
+                );
               },
             ),
+            
+            const SizedBox(height: 24),
+            
+            // Testing Tools (Development Only)
+            const AmbulanceSimulatorWidget(),
             
             const SizedBox(height: 24),
             
@@ -315,10 +404,10 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
     );
   }
 
-  Widget _buildPatientCard(IncomingPatient patient) {
-    Color priorityColor = patient.priority == 'critical'
+  Widget _buildPatientCard(Map<String, dynamic> patient) {
+    Color priorityColor = patient['priority'] == 'critical'
         ? const Color(0xFFFF5252)
-        : patient.priority == 'high'
+        : patient['priority'] == 'high'
             ? const Color(0xFFFF9800)
             : const Color(0xFF4CAF50);
 
@@ -327,8 +416,8 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
         // Navigate to live tracking screen with patient data
         Get.toNamed('/hospital-live-tracking', arguments: {
           'patient': patient,
-          'tripId': 'T001',
-          'ambulanceId': patient.ambulanceId,
+          'tripId': patient['id'],
+          'ambulanceId': patient['ambulanceId'],
         });
       },
       child: Container(
@@ -372,7 +461,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      patient.name,
+                      patient['name'] ?? 'Unknown Patient',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -386,7 +475,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        patient.priority,
+                        (patient['priority'] ?? 'medium').toUpperCase(),
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -400,7 +489,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                 const SizedBox(height: 4),
                 
                 Text(
-                  patient.condition,
+                  patient['condition'] ?? 'Emergency',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.black87,
@@ -422,7 +511,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            patient.ambulanceId,
+                            patient['ambulanceId'] ?? 'N/A',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -443,7 +532,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            patient.driverName,
+                            patient['driverName'] ?? 'Unknown Driver',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -468,7 +557,7 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'ETA ${patient.eta}',
+                'ETA ${patient['eta'] ?? '15 mins'}',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

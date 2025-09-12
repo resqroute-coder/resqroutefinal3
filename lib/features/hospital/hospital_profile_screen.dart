@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/professional_service.dart';
 
 class HospitalProfileScreen extends StatefulWidget {
   const HospitalProfileScreen({Key? key}) : super(key: key);
@@ -9,6 +10,52 @@ class HospitalProfileScreen extends StatefulWidget {
 }
 
 class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
+  bool _isEditing = false;
+  
+  // Additional hospital-specific fields
+  String _hospitalName = '';
+  String _hospitalType = '';
+  String _licenseNumber = '';
+  String _totalBeds = '';
+  String _availableBeds = '';
+  String _departments = '';
+  String _emergencyContact = '';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadAdditionalHospitalData();
+  }
+  
+  void _loadAdditionalHospitalData() {
+    // Load additional hospital data from additionalData field
+    final professional = _professionalService.currentProfessional;
+    if (professional?.additionalData != null) {
+      final additionalData = professional!.additionalData!;
+      setState(() {
+        _hospitalName = additionalData['hospitalName'] ?? 'Max Super Specialty Hospital';
+        _hospitalType = additionalData['hospitalType'] ?? 'Multi-Specialty Hospital';
+        _licenseNumber = additionalData['licenseNumber'] ?? 'HSP-2024-001';
+        _totalBeds = additionalData['totalBeds'] ?? '150';
+        _availableBeds = additionalData['availableBeds'] ?? '23';
+        _departments = additionalData['departments'] ?? '12';
+        _emergencyContact = additionalData['emergencyContact'] ?? '+91 120 456 7891';
+      });
+    } else {
+      // Set default values if no additional data
+      setState(() {
+        _hospitalName = 'Max Super Specialty Hospital';
+        _hospitalType = 'Multi-Specialty Hospital';
+        _licenseNumber = 'HSP-2024-001';
+        _totalBeds = '150';
+        _availableBeds = '23';
+        _departments = '12';
+        _emergencyContact = '+91 120 456 7891';
+      });
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,11 +77,26 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
+            icon: Icon(_isEditing ? Icons.save : Icons.edit, color: Colors.white),
             onPressed: () {
-              // Handle edit profile
+              if (_isEditing) {
+                _saveProfile();
+              } else {
+                setState(() {
+                  _isEditing = true;
+                });
+              }
             },
           ),
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () {
+                setState(() {
+                  _isEditing = false;
+                });
+              },
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -65,9 +127,9 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
                   const SizedBox(height: 16),
                   
                   // Hospital Name
-                  const Text(
-                    'Max Super Specialty Hospital',
-                    style: TextStyle(
+                  Text(
+                    _hospitalName,
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
@@ -78,9 +140,9 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
                   const SizedBox(height: 8),
                   
                   // Hospital Type
-                  const Text(
-                    'Multi-Specialty Hospital',
-                    style: TextStyle(
+                  Text(
+                    _hospitalType,
+                    style: const TextStyle(
                       fontSize: 16,
                       color: Colors.grey,
                     ),
@@ -89,9 +151,9 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
                   const SizedBox(height: 4),
                   
                   // License Number
-                  const Text(
-                    'License: HSP-2024-001',
-                    style: TextStyle(
+                  Text(
+                    'License: $_licenseNumber',
+                    style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
                     ),
@@ -180,35 +242,67 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
               ),
               child: Column(
                 children: [
+                  Obx(() => _buildInfoField(
+                    'Staff Name',
+                    _professionalService.professionalName,
+                    Icons.person,
+                  )),
+                  Obx(() => _buildInfoField(
+                    'Employee ID',
+                    _professionalService.employeeId,
+                    Icons.badge,
+                  )),
+                  Obx(() => _buildInfoField(
+                    'Email',
+                    _professionalService.professionalEmail,
+                    Icons.email,
+                  )),
+                  Obx(() => _buildInfoField(
+                    'Phone',
+                    _professionalService.professionalPhone,
+                    Icons.phone,
+                  )),
                   _buildInfoField(
                     'Hospital Name',
-                    'Max Super Specialty Hospital',
+                    _hospitalName,
                     Icons.local_hospital,
+                    onTap: _isEditing ? () => _editField('Hospital Name', _hospitalName, (value) => setState(() => _hospitalName = value)) : null,
                   ),
                   _buildInfoField(
-                    'Address',
-                    'Sector 19, Noida, Uttar Pradesh 201301',
-                    Icons.location_on,
+                    'Hospital Type',
+                    _hospitalType,
+                    Icons.business,
+                    onTap: _isEditing ? () => _editField('Hospital Type', _hospitalType, (value) => setState(() => _hospitalType = value)) : null,
                   ),
                   _buildInfoField(
-                    'Contact Number',
-                    '+91 120 456 7890',
-                    Icons.phone,
+                    'License Number',
+                    _licenseNumber,
+                    Icons.verified,
+                    onTap: _isEditing ? () => _editField('License Number', _licenseNumber, (value) => setState(() => _licenseNumber = value)) : null,
                   ),
                   _buildInfoField(
-                    'Emergency Hotline',
-                    '+91 120 456 7891',
+                    'Total Beds',
+                    _totalBeds,
+                    Icons.bed,
+                    onTap: _isEditing ? () => _editField('Total Beds', _totalBeds, (value) => setState(() => _totalBeds = value)) : null,
+                  ),
+                  _buildInfoField(
+                    'Available Beds',
+                    _availableBeds,
+                    Icons.hotel,
+                    onTap: _isEditing ? () => _editField('Available Beds', _availableBeds, (value) => setState(() => _availableBeds = value)) : null,
+                  ),
+                  _buildInfoField(
+                    'Departments',
+                    _departments,
+                    Icons.domain,
+                    onTap: _isEditing ? () => _editField('Departments', _departments, (value) => setState(() => _departments = value)) : null,
+                  ),
+                  _buildInfoField(
+                    'Emergency Contact',
+                    _emergencyContact,
                     Icons.emergency,
-                  ),
-                  _buildInfoField(
-                    'Email',
-                    'emergency@maxhospital.com',
-                    Icons.email,
-                  ),
-                  _buildInfoField(
-                    'Established',
-                    '1995',
-                    Icons.calendar_today,
+                    onTap: _isEditing ? () => _editField('Emergency Contact', _emergencyContact, (value) => setState(() => _emergencyContact = value)) : null,
                     isLast: true,
                   ),
                 ],
@@ -425,47 +519,57 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
     String value,
     IconData icon, {
     bool isLast = false,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        border: isLast ? null : const Border(
-          bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          border: isLast ? null : const Border(
+            bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: const Color(0xFFFF5252),
-            size: 20,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: const Color(0xFFFF5252),
+              size: 20,
             ),
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                _isEditing ? Icons.edit : Icons.chevron_right,
+                color: _isEditing ? const Color(0xFFFF5252) : Colors.grey,
+                size: 20,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -769,6 +873,83 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       },
       activeColor: const Color(0xFFFF5252),
     );
+  }
+
+  void _editField(String fieldName, String currentValue, Function(String) onSave) {
+    final TextEditingController controller = TextEditingController(text: currentValue);
+    
+    Get.dialog(
+      AlertDialog(
+        title: Text('Edit $fieldName'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: fieldName,
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: fieldName.contains('Address') ? 3 : 1,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                onSave(controller.text.trim());
+                Get.back();
+                Get.snackbar(
+                  'Success',
+                  '$fieldName updated successfully',
+                  backgroundColor: const Color(0xFF4CAF50),
+                  colorText: Colors.white,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveProfile() async {
+    try {
+      // Save additional hospital data to Firestore
+      await _professionalService.updateAdditionalData({
+        'hospitalName': _hospitalName,
+        'hospitalType': _hospitalType,
+        'licenseNumber': _licenseNumber,
+        'totalBeds': _totalBeds,
+        'availableBeds': _availableBeds,
+        'departments': _departments,
+        'emergencyContact': _emergencyContact,
+      });
+      
+      setState(() {
+        _isEditing = false;
+      });
+      
+      Get.snackbar(
+        'Profile Saved',
+        'Hospital profile has been updated successfully',
+        backgroundColor: const Color(0xFF4CAF50),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to save profile: $e',
+        backgroundColor: const Color(0xFFFF5252),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   void _showSignOutDialog() {

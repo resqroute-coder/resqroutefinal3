@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/professional_service.dart';
+import '../../shared/widgets/ambulance_map_widget.dart';
 
 class TrafficPoliceDashboardScreen extends StatefulWidget {
   const TrafficPoliceDashboardScreen({Key? key}) : super(key: key);
@@ -10,48 +12,23 @@ class TrafficPoliceDashboardScreen extends StatefulWidget {
 
 class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScreen> {
   int _selectedTabIndex = 0;
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
+  Map<String, dynamic> _trafficMetrics = {};
 
-  final List<ActiveEmergency> _activeEmergencies = [
-    ActiveEmergency(
-      ambulanceId: 'UP-16-AB-1234',
-      patientName: 'Rajesh Kumar',
-      priority: 'critical',
-      status: 'enroute',
-      emergencyType: 'Cardiac Arrest',
-      patientAge: 'Male, 58 years',
-      location: 'Near DND Flyway',
-      sector: 'Sector 15, Noida → Max Super Speciality Hospital',
-      eta: '8 mins',
-      timeUpdated: '30 secs ago',
-      clearanceStatus: 'Clearance Requested',
-    ),
-    ActiveEmergency(
-      ambulanceId: 'UP-16-AB-5678',
-      patientName: 'Priya Sharma',
-      priority: 'high',
-      status: 'pickup',
-      emergencyType: 'Road Accident',
-      patientAge: 'Female, 32 years',
-      location: 'Atta Market Area',
-      sector: 'Sector 18, Noida → Fortis Hospital',
-      eta: '15 mins',
-      timeUpdated: '45 secs ago',
-      clearanceStatus: 'Clearance Requested',
-    ),
-    ActiveEmergency(
-      ambulanceId: 'UP-16-AB-9012',
-      patientName: 'Amit Singh',
-      priority: 'medium',
-      status: 'dispatched',
-      emergencyType: 'Breathing Issues',
-      patientAge: 'Male, 45 years',
-      location: 'Sector 62, Noida',
-      sector: 'Sector 62 → Apollo Hospital',
-      eta: '12 mins',
-      timeUpdated: '2 mins ago',
-      clearanceStatus: 'Route Cleared',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadTrafficMetrics();
+  }
+
+  Future<void> _loadTrafficMetrics() async {
+    final metrics = await _professionalService.getTrafficPoliceMetrics();
+    if (mounted) {
+      setState(() {
+        _trafficMetrics = metrics;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,11 +57,11 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
+                  Expanded(
+                    child: Obx(() => Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Traffic Control',
                           style: TextStyle(
                             color: Colors.white,
@@ -93,14 +70,14 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                           ),
                         ),
                         Text(
-                          'Emergency Coordination Unit',
-                          style: TextStyle(
+                          _professionalService.professionalName,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                           ),
                         ),
                       ],
-                    ),
+                    )),
                   ),
                   IconButton(
                     onPressed: () {
@@ -144,7 +121,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                 children: [
                   Expanded(
                     child: _buildMetricCard(
-                      '3',
+                      _trafficMetrics['activeEmergencies']?.toString() ?? '0',
                       'Active Emergencies',
                       const Color(0xFFFF5252),
                       Icons.emergency,
@@ -153,7 +130,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMetricCard(
-                      '2',
+                      _trafficMetrics['clearanceRequests']?.toString() ?? '0',
                       'Clearance Requests',
                       const Color(0xFFFF9800),
                       Icons.traffic,
@@ -170,7 +147,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                 children: [
                   Expanded(
                     child: _buildMetricCard(
-                      '1',
+                      _trafficMetrics['criticalCases']?.toString() ?? '0',
                       'Critical Cases',
                       const Color(0xFFFF1744),
                       Icons.warning,
@@ -179,7 +156,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMetricCard(
-                      '12',
+                      _trafficMetrics['routesCleared']?.toString() ?? '0',
                       'Routes Cleared',
                       const Color(0xFF4CAF50),
                       Icons.check_circle,
@@ -204,7 +181,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
             // Content Area
             Expanded(
               child: _selectedTabIndex == 0 
-                  ? _buildActiveEmergenciesTab()
+                  ? _buildLiveTrackingTab()
                   : _selectedTabIndex == 1
                       ? _buildRouteClearanceTab()
                       : _buildActivityLogTab(),
@@ -287,6 +264,86 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
     );
   }
 
+  Widget _buildLiveTrackingTab() {
+    return Column(
+      children: [
+        // Section Header
+        Container(
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Live Ambulance Tracking',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF5252),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Live',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.fullscreen, color: Color(0xFFFF5252)),
+                    onPressed: () {
+                      Get.toNamed('/police-live-tracking');
+                    },
+                    tooltip: 'Full Screen Map',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // Map Widget
+        Expanded(
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: const AmbulanceMapWidget(
+              userType: 'police',
+              height: double.infinity,
+              showControls: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActiveEmergenciesTab() {
     return Column(
       children: [
@@ -341,11 +398,57 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
         
         // Emergency List
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _activeEmergencies.length,
-            itemBuilder: (context, index) {
-              return _buildEmergencyCard(_activeEmergencies[index]);
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _professionalService.getActiveEmergenciesStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFF5252),
+                  ),
+                );
+              }
+              
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 48,
+                        color: Colors.grey.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No Active Emergencies',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Active emergency situations will appear here',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  return _buildEmergencyCard(snapshot.data![index]);
+                },
+              );
             },
           ),
         ),
@@ -373,12 +476,59 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
         
         // Clearance Requests List
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _activeEmergencies.where((e) => e.clearanceStatus == 'Clearance Requested').length,
-            itemBuilder: (context, index) {
-              final clearanceRequests = _activeEmergencies.where((e) => e.clearanceStatus == 'Clearance Requested').toList();
-              return _buildClearanceRequestCard(clearanceRequests[index]);
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _professionalService.getActiveEmergenciesStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFF5252),
+                  ),
+                );
+              }
+              
+              final clearanceRequests = snapshot.data?.where((e) => e['clearanceStatus'] == 'Clearance Requested').toList() ?? [];
+              
+              if (clearanceRequests.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 48,
+                        color: Colors.grey.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No Clearance Requests',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Route clearance requests will appear here',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: clearanceRequests.length,
+                itemBuilder: (context, index) {
+                  return _buildClearanceRequestCard(clearanceRequests[index]);
+                },
+              );
             },
           ),
         ),
@@ -449,7 +599,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
     );
   }
 
-  Widget _buildEmergencyCard(ActiveEmergency emergency) {
+  Widget _buildEmergencyCard(Map<String, dynamic> emergency) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -491,7 +641,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        emergency.ambulanceId,
+                        emergency['ambulanceId'] ?? 'N/A',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -499,7 +649,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                         ),
                       ),
                       Text(
-                        emergency.patientName,
+                        emergency['patientName'] ?? 'Unknown Patient',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -514,11 +664,11 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getPriorityColor(emergency.priority),
+                      color: _getPriorityColor(emergency['priority'] ?? 'medium'),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      emergency.priority,
+                      (emergency['priority'] ?? 'medium').toUpperCase(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -530,11 +680,11 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(emergency.status),
+                      color: _getStatusColor(emergency['status'] ?? 'assigned'),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      emergency.status,
+                      (emergency['status'] ?? 'assigned').toUpperCase(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -551,7 +701,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
           
           // Emergency Details
           Text(
-            'Emergency: ${emergency.emergencyType}',
+            'Emergency: ${emergency['emergencyType'] ?? 'Emergency'}',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -562,7 +712,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
           const SizedBox(height: 4),
           
           Text(
-            emergency.patientAge,
+            emergency['patientAge'] ?? 'Age unknown',
             style: const TextStyle(
               fontSize: 14,
               color: Colors.black87,
@@ -578,7 +728,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  emergency.location,
+                  emergency['location'] ?? 'Unknown Location',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -586,7 +736,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                 ),
               ),
               Text(
-                'ETA ${emergency.eta}',
+                'ETA ${emergency['eta'] ?? '15 mins'}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -599,7 +749,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
           const SizedBox(height: 4),
           
           Text(
-            emergency.sector,
+            emergency['sector'] ?? 'Route unknown',
             style: const TextStyle(
               fontSize: 14,
               color: Colors.black87,
@@ -613,11 +763,11 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                emergency.clearanceStatus,
+                emergency['clearanceStatus'] ?? 'Clearance Requested',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: emergency.clearanceStatus == 'Route Cleared' 
+                  color: emergency['clearanceStatus'] == 'Route Cleared' 
                       ? const Color(0xFF4CAF50) 
                       : const Color(0xFFFF9800),
                 ),
@@ -625,7 +775,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
               Row(
                 children: [
                   Text(
-                    'Updated ${emergency.timeUpdated}',
+                    'Updated ${emergency['timeUpdated'] ?? 'Unknown'}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
@@ -688,7 +838,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
     }
   }
 
-  Widget _buildClearanceRequestCard(ActiveEmergency emergency) {
+  Widget _buildClearanceRequestCard(Map<String, dynamic> emergency) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -712,7 +862,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                emergency.ambulanceId,
+                emergency['ambulanceId'] ?? 'N/A',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -740,7 +890,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
           const SizedBox(height: 8),
           
           Text(
-            'Route: ${emergency.sector}',
+            'Route: ${emergency['sector'] ?? 'Route unknown'}',
             style: const TextStyle(
               fontSize: 14,
               color: Colors.black87,
@@ -750,7 +900,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
           const SizedBox(height: 4),
           
           Text(
-            'ETA: ${emergency.eta}',
+            'ETA: ${emergency['eta'] ?? '15 mins'}',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -917,11 +1067,11 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
     }
   }
 
-  void _clearRoute(ActiveEmergency emergency) {
+  void _clearRoute(Map<String, dynamic> emergency) {
     Get.dialog(
       AlertDialog(
         title: const Text('Clear Route'),
-        content: Text('Clear traffic route for ${emergency.ambulanceId}?'),
+        content: Text('Clear traffic route for ${emergency['ambulanceId']}?'),
         actions: [
           TextButton(
             onPressed: () => Get.back(),
@@ -932,7 +1082,7 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
               Get.back();
               Get.snackbar(
                 'Route Cleared',
-                'Traffic route cleared for ${emergency.ambulanceId}',
+                'Traffic route cleared for ${emergency['ambulanceId']}',
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
               );

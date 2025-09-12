@@ -5,10 +5,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'core/constants/app_colors.dart';
 import 'core/services/user_service.dart';
 import 'core/services/emergency_request_service.dart';
+import 'core/services/professional_service.dart';
+import 'core/services/ambulance_location_service.dart';
+import 'core/services/maps_service.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/comprehensive_notification_service.dart';
 import 'features/auth/splash_screen.dart';
 import 'features/auth/user_login_screen.dart';
 import 'features/auth/user_signup_screen.dart';
 import 'features/auth/professional_login_screen.dart';
+import 'features/auth/welcome_screen.dart';
+import 'scripts/debug_emergency_requests.dart';
 import 'features/patient/patient_registration_screen.dart';
 import 'features/patient/user_dashboard_screen.dart';
 import 'features/patient/service_history_screen.dart';
@@ -39,9 +46,16 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   
-  // Initialize GetX services
+  // Initialize GetX services - Order matters for dependencies
+  Get.put(NotificationService());
   Get.put(UserService());
   Get.put(EmergencyRequestService());
+  Get.put(ProfessionalService());
+  Get.put(AmbulanceLocationService());
+  Get.put(MapsService());
+  
+  // Initialize comprehensive notification service after core services
+  Get.put(ComprehensiveNotificationService());
   
   runApp(const ResQRouteApp());
 }
@@ -133,6 +147,8 @@ class ResQRouteApp extends StatelessWidget {
         GetPage(name: '/ambulance-assignment', page: () => const AmbulanceAssignmentScreen()),
         GetPage(name: '/hospital-reports', page: () => const HospitalReportsScreen()),
         GetPage(name: '/hospital-profile', page: () => const HospitalProfileScreen()),
+        GetPage(name: '/WelcomeScreen', page: () => const WelcomeScreen()),
+        GetPage(name: '/debug-emergency', page: () => DebugEmergencyRequests()),
       ],
     );
   }

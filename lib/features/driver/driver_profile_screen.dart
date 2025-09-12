@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/professional_service.dart';
 
 class DriverProfileScreen extends StatefulWidget {
   const DriverProfileScreen({Key? key}) : super(key: key);
@@ -9,12 +10,42 @@ class DriverProfileScreen extends StatefulWidget {
 }
 
 class _DriverProfileScreenState extends State<DriverProfileScreen> {
-  // Driver profile data
-  String _driverName = 'Driver njhb';
-  String _email = 'njhb@driver.resqroute.in';
-  String _phoneNumber = '+91 98765 43210';
-  String _address = '123 MG Road, Mumbai, Maharashtra';
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
   bool _isEditing = false;
+  
+  // Additional driver-specific fields
+  String _vehicleNumber = '';
+  String _licenseNumber = '';
+  String _ambulanceType = '';
+  String _experience = '';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadAdditionalDriverData();
+  }
+  
+  void _loadAdditionalDriverData() {
+    // Load additional driver data from additionalData field
+    final professional = _professionalService.currentProfessional;
+    if (professional?.additionalData != null) {
+      final additionalData = professional!.additionalData!;
+      setState(() {
+        _vehicleNumber = additionalData['vehicleNumber'] ?? 'AMB-001';
+        _licenseNumber = additionalData['licenseNumber'] ?? 'DL-2024-001';
+        _ambulanceType = additionalData['ambulanceType'] ?? 'Advanced Life Support';
+        _experience = additionalData['experience'] ?? '5 years';
+      });
+    } else {
+      // Set default values if no additional data
+      setState(() {
+        _vehicleNumber = 'AMB-001';
+        _licenseNumber = 'DL-2024-001';
+        _ambulanceType = 'Advanced Life Support';
+        _experience = '5 years';
+      });
+    }
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -114,14 +145,14 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   const SizedBox(height: 16),
                   
                   // Driver Name
-                  Text(
-                    _driverName,
+                  Obx(() => Text(
+                    _professionalService.professionalName,
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
-                  ),
+                  )),
                   
                   const SizedBox(height: 8),
                   
@@ -156,29 +187,49 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               ),
               child: Column(
                 children: [
-                  _buildProfileField(
+                  Obx(() => _buildProfileField(
                     'Full Name',
-                    _driverName,
+                    _professionalService.professionalName,
                     Icons.person,
-                    onTap: _isEditing ? () => _editField('Full Name', _driverName, (value) => _driverName = value) : null,
-                  ),
-                  _buildProfileField(
+                  )),
+                  Obx(() => _buildProfileField(
+                    'Employee ID',
+                    _professionalService.employeeId,
+                    Icons.badge,
+                  )),
+                  Obx(() => _buildProfileField(
                     'Email Address',
-                    _email,
+                    _professionalService.professionalEmail,
                     Icons.email,
-                    onTap: _isEditing ? () => _editField('Email Address', _email, (value) => _email = value) : null,
-                  ),
-                  _buildProfileField(
+                  )),
+                  Obx(() => _buildProfileField(
                     'Phone Number',
-                    _phoneNumber,
+                    _professionalService.professionalPhone,
                     Icons.phone,
-                    onTap: _isEditing ? () => _editField('Phone Number', _phoneNumber, (value) => _phoneNumber = value) : null,
+                  )),
+                  _buildProfileField(
+                    'Vehicle Number',
+                    _vehicleNumber,
+                    Icons.local_shipping,
+                    onTap: _isEditing ? () => _editField('Vehicle Number', _vehicleNumber, (value) => setState(() => _vehicleNumber = value)) : null,
                   ),
                   _buildProfileField(
-                    'Address',
-                    _address,
-                    Icons.location_on,
-                    onTap: _isEditing ? () => _editField('Address', _address, (value) => _address = value) : null,
+                    'License Number',
+                    _licenseNumber,
+                    Icons.credit_card,
+                    onTap: _isEditing ? () => _editField('License Number', _licenseNumber, (value) => setState(() => _licenseNumber = value)) : null,
+                  ),
+                  _buildProfileField(
+                    'Ambulance Type',
+                    _ambulanceType,
+                    Icons.medical_services,
+                    onTap: _isEditing ? () => _editField('Ambulance Type', _ambulanceType, (value) => setState(() => _ambulanceType = value)) : null,
+                  ),
+                  _buildProfileField(
+                    'Experience',
+                    _experience,
+                    Icons.work,
+                    onTap: _isEditing ? () => _editField('Experience', _experience, (value) => setState(() => _experience = value)) : null,
                     isLast: true,
                   ),
                 ],
@@ -574,18 +625,36 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     );
   }
 
-  void _saveProfile() {
-    setState(() {
-      _isEditing = false;
-    });
-    
-    Get.snackbar(
-      'Profile Saved',
-      'Your profile has been updated successfully',
-      backgroundColor: const Color(0xFF4CAF50),
-      colorText: Colors.white,
-      duration: const Duration(seconds: 2),
-    );
+  void _saveProfile() async {
+    try {
+      // Save additional driver data to Firestore
+      await _professionalService.updateAdditionalData({
+        'vehicleNumber': _vehicleNumber,
+        'licenseNumber': _licenseNumber,
+        'ambulanceType': _ambulanceType,
+        'experience': _experience,
+      });
+      
+      setState(() {
+        _isEditing = false;
+      });
+      
+      Get.snackbar(
+        'Profile Saved',
+        'Your profile has been updated successfully',
+        backgroundColor: const Color(0xFF4CAF50),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to save profile: $e',
+        backgroundColor: const Color(0xFFFF5252),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   void _showSignOutDialog() {

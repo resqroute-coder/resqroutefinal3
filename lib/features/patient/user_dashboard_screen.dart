@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/user_service.dart';
+import '../../core/services/emergency_request_service.dart';
+import '../../core/models/emergency_request_model.dart';
 
 class UserDashboardScreen extends StatefulWidget {
   const UserDashboardScreen({Key? key}) : super(key: key);
@@ -14,6 +16,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
   int _currentIndex = 0;
   final NotificationService _notificationService = Get.put(NotificationService());
   final UserService _userService = Get.find<UserService>();
+  final EmergencyRequestService _emergencyService = Get.find<EmergencyRequestService>();
 
   final List<RecentActivity> _recentActivities = [
     RecentActivity(
@@ -193,6 +196,181 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
               
               const SizedBox(height: 24),
               
+              // My Emergency Request Section - Only shows patient's own active request
+              StreamBuilder<EmergencyRequest?>(
+                stream: _emergencyService.getPatientActiveRequestStream(_userService.firebaseUser?.uid ?? ''),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final myRequest = snapshot.data!;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE8E8),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFFF5252), width: 2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'My Emergency Request',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF5252),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(myRequest.status),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _getStatusText(myRequest.status),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Request ID: ${myRequest.id.substring(0, 8).toUpperCase()}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.medical_services, color: Colors.grey, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                myRequest.emergencyTypeText,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.grey, size: 16),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  myRequest.pickupLocation,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (myRequest.driverName != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.person, color: Colors.grey, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Assigned Driver: ${myRequest.driverName}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (myRequest.ambulanceId != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.local_shipping, color: Colors.grey, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Ambulance: ${myRequest.ambulanceId}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    Get.toNamed('/emergency-request-details', arguments: myRequest.id);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFF5252),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  child: const Text(
+                                    'Track Status',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              if (myRequest.status == RequestStatus.pending)
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      _showCancelConfirmation(myRequest.id);
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Color(0xFFFF5252)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    child: const Text(
+                                      'Cancel Request',
+                                      style: TextStyle(
+                                        color: Color(0xFFFF5252),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              
               // Interactive Map Section
               GestureDetector(
                 onTap: () {
@@ -206,7 +384,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
+                        color: Colors.grey.withValues(alpha: 0.1),
                         spreadRadius: 2,
                         blurRadius: 8,
                         offset: const Offset(0, 2),
@@ -390,7 +568,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withValues(alpha: 0.1),
               spreadRadius: 2,
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -437,7 +615,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 4,
             offset: const Offset(0, 1),
@@ -578,7 +756,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                         Text(notification.message),
                         const SizedBox(height: 4),
                         Text(
-                          _formatTime(notification.timestamp),
+                          _formatTimestamp(notification.timestamp),
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
@@ -632,7 +810,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
                   ),
                   child: Stack(
                     children: [
@@ -668,7 +846,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha: 0.2),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -740,7 +918,7 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -774,19 +952,132 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
     );
   }
 
-  String _formatTime(DateTime timestamp) {
+  String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
     
     if (difference.inMinutes < 1) {
       return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} min ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hr ago';
     } else {
-      return '${difference.inDays}d ago';
+      return '${difference.inDays} days ago';
     }
+  }
+
+  Color _getStatusColor(RequestStatus status) {
+    switch (status) {
+      case RequestStatus.pending:
+        return Colors.orange;
+      case RequestStatus.accepted:
+        return const Color(0xFF4CAF50);
+      case RequestStatus.enRoute:
+        return const Color(0xFF2196F3);
+      case RequestStatus.pickedUp:
+        return const Color(0xFF9C27B0);
+      case RequestStatus.completed:
+        return const Color(0xFF4CAF50);
+      case RequestStatus.cancelled:
+        return Colors.grey;
+    }
+  }
+
+  String _getStatusText(RequestStatus status) {
+    switch (status) {
+      case RequestStatus.pending:
+        return 'Finding Driver';
+      case RequestStatus.accepted:
+        return 'Driver Assigned';
+      case RequestStatus.enRoute:
+        return 'En Route';
+      case RequestStatus.pickedUp:
+        return 'Picked Up';
+      case RequestStatus.completed:
+        return 'Completed';
+      case RequestStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  void _showCancelConfirmation(String requestId) {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Cancel Emergency Request',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to cancel your emergency request? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text(
+              'Keep Request',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Get.back();
+              
+              // Show loading dialog
+              Get.dialog(
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF5252)),
+                ),
+                barrierDismissible: false,
+              );
+              
+              try {
+                final success = await _emergencyService.cancelRequest(requestId);
+                
+                Get.back(); // Close loading dialog
+                
+                if (success) {
+                  Get.snackbar(
+                    'Request Cancelled',
+                    'Your emergency request has been cancelled successfully.',
+                    backgroundColor: Colors.orange,
+                    colorText: Colors.white,
+                  );
+                } else {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to cancel request. Please try again.',
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                }
+              } catch (e) {
+                Get.back(); // Close loading dialog
+                Get.snackbar(
+                  'Error',
+                  'An error occurred while cancelling the request.',
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Cancel Request',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -794,7 +1085,7 @@ class MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.withOpacity(0.2)
+      ..color = Colors.grey.withValues(alpha: 0.2)
       ..strokeWidth = 1;
 
     const gridSpacing = 30.0;

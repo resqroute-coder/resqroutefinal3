@@ -4,6 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../config/api_config.dart';
+import 'ambulance_location_service.dart';
+import 'dart:async';
 
 class MapsService extends GetxController {
   static MapsService get instance => Get.find();
@@ -11,9 +13,14 @@ class MapsService extends GetxController {
   GoogleMapController? _mapController;
   GoogleMapController? get mapController => _mapController;
   final RxSet<Marker> _markers = <Marker>{}.obs;
+  final RxSet<Polyline> _polylines = <Polyline>{}.obs;
   final Rx<LatLng> _currentLocation = const LatLng(19.0760, 72.8777).obs; // Mumbai default
   final RxBool _isLocationPermissionGranted = false.obs;
   final RxBool _isLoadingLocation = false.obs;
+  
+  // Ambulance tracking
+  final AmbulanceLocationService _ambulanceService = Get.find<AmbulanceLocationService>();
+  StreamSubscription<List<Map<String, dynamic>>>? _ambulanceSubscription;
 
   // Hospital locations in Mumbai
   final List<Map<String, dynamic>> _hospitalLocations = [
@@ -56,6 +63,7 @@ class MapsService extends GetxController {
 
   // Getters
   Set<Marker> get markers => _markers.value;
+  Set<Polyline> get polylines => _polylines.value;
   LatLng get currentLocation => _currentLocation.value;
   bool get isLocationPermissionGranted => _isLocationPermissionGranted.value;
   bool get isLoadingLocation => _isLoadingLocation.value;
@@ -66,17 +74,29 @@ class MapsService extends GetxController {
     super.onInit();
     _checkApiConfiguration();
     _initializeLocation();
+    _startAmbulanceTracking();
+  }
+
+  @override
+  void onClose() {
+    _ambulanceSubscription?.cancel();
+    super.onClose();
   }
 
   void _checkApiConfiguration() {
     if (!ApiConfig.isGoogleMapsConfigured) {
-      Get.snackbar(
-        'Configuration Required',
-        'Google Maps API key not configured. Please add your API key.',
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 5),
-      );
+      // Delay snackbar until after GetX is fully initialized
+      Future.delayed(Duration(seconds: 1), () {
+        if (Get.context != null) {
+          Get.snackbar(
+            'Configuration Required',
+            'Google Maps API key not configured. Please check GOOGLE_MAPS_SETUP.md',
+            snackPosition: SnackPosition.TOP,
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+          );
+        }
+      });
     }
   }
 
@@ -354,5 +374,266 @@ class MapsService extends GetxController {
     // Refresh markers
     _markers.removeWhere((marker) => marker.markerId.value.startsWith('hospital_'));
     _addHospitalMarkers();
+  }
+
+  // Start tracking active ambulances
+  void _startAmbulanceTracking() {
+    _ambulanceSubscription = _ambulanceService
+        .getActiveAmbulancesStream()
+        .listen((ambulances) {
+      _updateAmbulanceMarkers(ambulances);
+    });
+  }
+
+  // Update ambulance markers on map
+  void _updateAmbulanceMarkers(List<Map<String, dynamic>> ambulances) {
+    // Remove existing ambulance markers
+    _markers.removeWhere((marker) => marker.markerId.value.startsWith('ambulance_'));
+    
+    // Add new ambulance markers
+    for (var ambulance in ambulances) {
+      final position = LatLng(
+        ambulance['latitude'] ?? 19.0760,
+        ambulance['longitude'] ?? 72.8777,
+      );
+      
+      Color markerColor = _getAmbulanceMarkerColor(ambulance['status']);
+      
+      _markers.add(
+        Marker(
+          markerId: MarkerId('ambulance_${ambulance['ambulanceId']}'),
+          position: position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(_getMarkerHue(markerColor)),
+          infoWindow: InfoWindow(
+            title: 'Ambulance ${ambulance['ambulanceId']}',
+            snippet: '${ambulance['status']} • Speed: ${ambulance['speed']?.toStringAsFixed(1) ?? '0'} km/h',
+            onTap: () => _showAmbulanceDetails(ambulance),
+          ),
+          rotation: ambulance['heading']?.toDouble() ?? 0.0,
+        ),
+      );
+    }
+  }
+
+  Color _getAmbulanceMarkerColor(String status) {
+    switch (status) {
+      case 'active':
+      case 'enRoute':
+        return Colors.green;
+      case 'atPickup':
+        return Colors.orange;
+      case 'toHospital':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  double _getMarkerHue(Color color) {
+    if (color == Colors.green) return BitmapDescriptor.hueGreen;
+    if (color == Colors.orange) return BitmapDescriptor.hueOrange;
+    if (color == Colors.blue) return BitmapDescriptor.hueBlue;
+    return BitmapDescriptor.hueRed;
+  }
+
+  void _showAmbulanceDetails(Map<String, dynamic> ambulance) {
+    Get.dialog(
+      AlertDialog(
+        title: Text('Ambulance ${ambulance['ambulanceId']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow(Icons.local_shipping, 'Status', ambulance['status']),
+            _buildDetailRow(Icons.speed, 'Speed', '${ambulance['speed']?.toStringAsFixed(1) ?? '0'} km/h'),
+            _buildDetailRow(Icons.person, 'Driver', ambulance['driverId'] ?? 'Not assigned'),
+            if (ambulance['emergencyRequestId'] != null)
+              _buildDetailRow(Icons.emergency, 'Emergency ID', ambulance['emergencyRequestId']),
+            if (ambulance['destination'] != null)
+              _buildDetailRow(Icons.location_on, 'Destination', ambulance['destination']),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Close'),
+          ),
+          if (ambulance['emergencyRequestId'] != null)
+            ElevatedButton(
+              onPressed: () {
+                Get.back();
+                _showAmbulanceRoute(ambulance);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252)),
+              child: const Text('Show Route', style: TextStyle(color: Colors.white)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFFFF5252)),
+          const SizedBox(width: 8),
+          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w500)),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  // Show ambulance route
+  void _showAmbulanceRoute(Map<String, dynamic> ambulance) async {
+    try {
+      final route = await _ambulanceService.getAmbulanceRoute(ambulance['ambulanceId']);
+      if (route != null) {
+        _displayRoute(route);
+      } else {
+        Get.snackbar(
+          'Route Not Available',
+          'Route information not found for this ambulance',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to load route information',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  // Display route on map
+  void _displayRoute(Map<String, dynamic> route) {
+    // Clear existing polylines
+    _polylines.clear();
+    
+    // Create route polyline
+    final routePoints = route['routePoints'] as List<dynamic>? ?? [];
+    if (routePoints.isNotEmpty) {
+      final points = routePoints.map((point) => 
+        LatLng(point['latitude'], point['longitude'])
+      ).toList();
+      
+      _polylines.add(
+        Polyline(
+          polylineId: const PolylineId('ambulance_route'),
+          points: points,
+          color: const Color(0xFFFF5252),
+          width: 4,
+          patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+        ),
+      );
+      
+      // Fit camera to show entire route
+      if (_mapController != null && points.length >= 2) {
+        _fitCameraToPoints(points);
+      }
+    }
+  }
+
+  // Fit camera to show all points
+  void _fitCameraToPoints(List<LatLng> points) {
+    if (points.isEmpty) return;
+    
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+    
+    for (var point in points) {
+      minLat = minLat < point.latitude ? minLat : point.latitude;
+      maxLat = maxLat > point.latitude ? maxLat : point.latitude;
+      minLng = minLng < point.longitude ? minLng : point.longitude;
+      maxLng = maxLng > point.longitude ? maxLng : point.longitude;
+    }
+    
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        100.0,
+      ),
+    );
+  }
+
+  // Add emergency location markers
+  void addEmergencyMarkers(List<Map<String, dynamic>> emergencies) {
+    // Remove existing emergency markers
+    _markers.removeWhere((marker) => marker.markerId.value.startsWith('emergency_'));
+    
+    for (var emergency in emergencies) {
+      if (emergency['pickupLocation'] != null) {
+        // Parse location string to coordinates (simplified)
+        final pickupCoords = _parseLocationString(emergency['pickupLocation']);
+        if (pickupCoords != null) {
+          _markers.add(
+            Marker(
+              markerId: MarkerId('emergency_pickup_${emergency['id']}'),
+              position: pickupCoords,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+              infoWindow: InfoWindow(
+                title: 'Emergency Pickup',
+                snippet: emergency['emergencyType'] ?? 'Medical Emergency',
+              ),
+            ),
+          );
+        }
+      }
+      
+      if (emergency['hospitalLocation'] != null) {
+        final hospitalCoords = _parseLocationString(emergency['hospitalLocation']);
+        if (hospitalCoords != null) {
+          _markers.add(
+            Marker(
+              markerId: MarkerId('emergency_hospital_${emergency['id']}'),
+              position: hospitalCoords,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              infoWindow: InfoWindow(
+                title: 'Destination Hospital',
+                snippet: emergency['hospitalLocation'],
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Simple location string parser (you might want to use geocoding API)
+  LatLng? _parseLocationString(String location) {
+    // This is a simplified parser. In production, use geocoding API
+    if (location.toLowerCase().contains('bandra')) {
+      return const LatLng(19.0596, 72.8295);
+    } else if (location.toLowerCase().contains('mumbai')) {
+      return const LatLng(19.0760, 72.8777);
+    }
+    return null;
+  }
+
+  // Filter ambulances by status
+  void filterAmbulancesByStatus(String status) {
+    _ambulanceSubscription?.cancel();
+    _ambulanceSubscription = _ambulanceService
+        .getActiveAmbulancesStream()
+        .map((ambulances) => ambulances.where((a) => a['status'] == status).toList())
+        .listen((ambulances) {
+      _updateAmbulanceMarkers(ambulances);
+    });
+  }
+
+  // Reset ambulance filter
+  void resetAmbulanceFilter() {
+    _ambulanceSubscription?.cancel();
+    _startAmbulanceTracking();
   }
 }

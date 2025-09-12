@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/services/emergency_request_service.dart';
+import '../../core/services/professional_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/models/emergency_request_model.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
@@ -14,40 +16,26 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   bool _isOnline = true;
   int _currentIndex = 0;
   final EmergencyRequestService _emergencyService = Get.find<EmergencyRequestService>();
+  final ProfessionalService _professionalService = Get.put(ProfessionalService());
+  final NotificationService _notificationService = Get.find<NotificationService>();
   
-  // Mock driver data - in real app this would come from authentication
-  final String _driverId = 'driver_001';
-  final String _driverName = 'Amit Kumar';
-  final String _ambulanceId = 'AMB_001';
-  
-  final List<NotificationItem> _notifications = [
-    NotificationItem(
-      id: '1',
-      title: 'New Emergency Request',
-      message: 'Critical patient pickup at Bandra West',
-      time: '2 min ago',
-      isRead: false,
-      type: 'emergency',
-    ),
-    NotificationItem(
-      id: '2',
-      title: 'Trip Completed',
-      message: 'Successfully delivered patient to Apollo Hospital',
-      time: '15 min ago',
-      isRead: true,
-      type: 'success',
-    ),
-    NotificationItem(
-      id: '3',
-      title: 'Route Update',
-      message: 'Traffic cleared on Western Express Highway',
-      time: '1 hour ago',
-      isRead: false,
-      type: 'info',
-    ),
-  ];
+  Map<String, dynamic> _performanceMetrics = {};
 
-  // Remove static requests - we'll use Firebase data
+  @override
+  void initState() {
+    super.initState();
+    _loadPerformanceMetrics();
+  }
+
+  Future<void> _loadPerformanceMetrics() async {
+    final metrics = await _professionalService.getDriverPerformance();
+    if (mounted) {
+      setState(() {
+        _performanceMetrics = metrics;
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -82,11 +70,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
+                    Expanded(
+                      child: Obx(() => Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'Driver Portal',
                             style: TextStyle(
                               fontSize: 18,
@@ -95,14 +83,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                             ),
                           ),
                           Text(
-                            'Amit Kumar',
-                            style: TextStyle(
+                            _professionalService.professionalName,
+                            style: const TextStyle(
                               fontSize: 14,
                               color: Colors.grey,
                             ),
                           ),
                         ],
-                      ),
+                      )),
                     ),
                     IconButton(
                       onPressed: () {
@@ -131,14 +119,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       ),
                     ),
                     IconButton(
+                      icon: const Icon(Icons.bug_report, color: Colors.orange),
                       onPressed: () {
-                        _showSettingsPopup(context);
+                        Get.toNamed('/debug-emergency');
                       },
-                      icon: const Icon(
-                        Icons.settings,
-                        color: Colors.black54,
-                        size: 28,
-                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: () {
+                        // Handle settings
+                      },
                     ),
                   ],
                 ),
@@ -196,166 +186,214 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
               
               const SizedBox(height: 16),
               
-              // Active Trip Section
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFE8E8),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Active Trip',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF5252),
+              // Active Trip Section - Show current assignment or no active trip
+              StreamBuilder<List<EmergencyRequest>>(
+                stream: _emergencyService.getDriverActiveTripsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                    final activeTrip = snapshot.data!.first;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE8E8),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Active Trip',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF5252),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF5252),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'ETA: 8 min',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF5252),
-                            borderRadius: BorderRadius.circular(12),
+                          
+                          const SizedBox(height: 12),
+                          
+                          Text(
+                            activeTrip.patientName,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
                           ),
-                          child: const Text(
-                            'ETA: 8 min',
-                            style: TextStyle(
-                              color: Colors.white,
+                          
+                          const SizedBox(height: 8),
+                          
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.grey, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                activeTrip.pickupLocation,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 4),
+                          
+                          Row(
+                            children: [
+                              const Icon(Icons.local_hospital, color: Colors.grey, size: 16),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  activeTrip.hospitalLocation,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 4),
+                          
+                          Text(
+                            activeTrip.id.substring(0, 8).toUpperCase(),
+                            style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    const Text(
-                      'Amit Kumar',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    const Row(
-                      children: [
-                        Icon(Icons.location_on, color: Colors.grey, size: 16),
-                        SizedBox(width: 4),
-                        Text(
-                          'Worli, Mumbai',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 4),
-                    
-                    const Row(
-                      children: [
-                        Icon(Icons.local_hospital, color: Colors.grey, size: 16),
-                        SizedBox(width: 4),
-                        Text(
-                          'Lilavati Hospital',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 4),
-                    
-                    const Text(
-                      'TRIP001',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Action Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Get.toNamed('/driver-navigation');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF5252),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Action Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    Get.toNamed('/driver-navigation', arguments: activeTrip.id);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFF5252),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  child: const Text(
+                                    'Navigate',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text(
-                              'Navigate',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
+                              const SizedBox(width: 12),
+                              OutlinedButton(
+                                onPressed: () {
+                                  // Handle call patient
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.grey),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                ),
+                                child: const Icon(
+                                  Icons.phone,
+                                  color: Colors.black87,
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              OutlinedButton(
+                                onPressed: () {
+                                  Get.toNamed('/emergency-request-details', arguments: activeTrip.id);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.grey),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                                child: const Text(
+                                  'Details',
+                                  style: TextStyle(
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton(
-                          onPressed: () {
-                            // Handle call
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.grey),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.all(12),
+                        ],
+                      ),
+                    );
+                  } else {
+                    // No active trip
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 48,
+                            color: Colors.grey.withValues(alpha: 0.5),
                           ),
-                          child: const Icon(
-                            Icons.phone,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton(
-                          onPressed: () {
-                            // Handle details
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.grey),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          child: const Text(
-                            'Details',
+                          const SizedBox(height: 12),
+                          Text(
+                            'No Active Trip',
                             style: TextStyle(
-                              color: Colors.black87,
+                              fontSize: 16,
                               fontWeight: FontWeight.w600,
+                              color: Colors.grey.withValues(alpha: 0.7),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'You\'ll see your current assignment here',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
               ),
               
               const SizedBox(height: 24),
@@ -394,7 +432,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       children: [
                         Expanded(
                           child: _buildPerformanceCard(
-                            '5',
+                            _performanceMetrics['tripsCompleted']?.toString() ?? '0',
                             'Trips Completed',
                             const Color(0xFFFF5252),
                           ),
@@ -402,7 +440,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildPerformanceCard(
-                            '47',
+                            _performanceMetrics['kmDriven']?.toString() ?? '0',
                             'KM Driven',
                             const Color(0xFF4CAF50),
                           ),
@@ -416,7 +454,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       children: [
                         Expanded(
                           child: _buildPerformanceCard(
-                            '₹2850',
+                            '₹${_performanceMetrics['earnings']?.toString() ?? '0'}',
                             'Earnings',
                             const Color(0xFF2196F3),
                           ),
@@ -424,7 +462,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildPerformanceCard(
-                            '4.8',
+                            _performanceMetrics['rating']?.toStringAsFixed(1) ?? '4.5',
                             'Rating',
                             const Color(0xFFFF9800),
                           ),
@@ -720,11 +758,15 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             children: [
               const Icon(Icons.local_hospital, color: Colors.grey, size: 16),
               const SizedBox(width: 4),
-              Text(
-                request.hospitalLocation,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+              Expanded(
+                child: Text(
+                  request.hospitalLocation,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -820,14 +862,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _notifications.length,
-                    itemBuilder: (context, index) {
-                      final notification = _notifications[index];
-                      return _buildNotificationItem(notification);
-                    },
-                  ),
+                  child: Obx(() {
+                    final notifications = _notificationService.notifications;
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: notifications.length,
+                      itemBuilder: (context, index) {
+                        final notification = notifications[index];
+                        return _buildNotificationItem(notification);
+                      },
+                    );
+                  }),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -835,12 +880,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   child: ElevatedButton(
                     onPressed: () {
                       // Mark all as read
-                      setState(() {
-                        for (var notification in _notifications) {
-                          notification.isRead = true;
-                        }
-                      });
-                      Navigator.pop(context);
+                      _notificationService.markAllAsRead();
+                      Get.back();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF5252),
@@ -926,7 +967,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   Icons.person,
                   'Edit Profile',
                   () {
-                    Navigator.pop(context);
+                    Get.back();
                     Get.toNamed('/driver-profile');
                   },
                 ),
@@ -934,7 +975,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   Icons.history,
                   'Trip History',
                   () {
-                    Navigator.pop(context);
+                    Get.back();
                     Get.toNamed('/driver-trips');
                   },
                 ),
@@ -942,7 +983,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   Icons.help,
                   'Help & Support',
                   () {
-                    Navigator.pop(context);
+                    Get.back();
                     // Navigate to help screen
                   },
                 ),
@@ -950,7 +991,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   Icons.logout,
                   'Logout',
                   () {
-                    Navigator.pop(context);
+                    Get.back();
                     _showLogoutConfirmation(context);
                   },
                 ),
@@ -962,26 +1003,31 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     );
   }
 
-  Widget _buildNotificationItem(NotificationItem notification) {
+  Widget _buildNotificationItem(NotificationModel notification) {
     IconData iconData;
     Color iconColor;
     
     switch (notification.type) {
-      case 'emergency':
+      case NotificationType.emergency:
         iconData = Icons.emergency;
         iconColor = const Color(0xFFFF5252);
         break;
-      case 'success':
+      case NotificationType.update:
         iconData = Icons.check_circle;
         iconColor = const Color(0xFF4CAF50);
         break;
-      case 'info':
+      case NotificationType.info:
         iconData = Icons.info;
         iconColor = const Color(0xFF2196F3);
         break;
-      default:
-        iconData = Icons.notifications;
-        iconColor = Colors.grey;
+      case NotificationType.ambulance:
+        iconData = Icons.local_shipping;
+        iconColor = const Color(0xFF2196F3);
+        break;
+      case NotificationType.warning:
+        iconData = Icons.warning;
+        iconColor = const Color(0xFFFF9800);
+        break;
     }
 
     return Container(
@@ -1031,7 +1077,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  notification.time,
+                  _formatTimestamp(notification.timestamp),
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.grey,
@@ -1168,7 +1214,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Get.back(),
               child: const Text(
                 'Cancel',
                 style: TextStyle(color: Colors.grey),
@@ -1176,7 +1222,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context);
+                Get.back();
                 Get.offAllNamed('/auth-selection');
               },
               style: ElevatedButton.styleFrom(
@@ -1208,9 +1254,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
       
       final success = await _emergencyService.acceptRequest(
         requestId: request.id,
-        driverId: _driverId,
-        driverName: _driverName,
-        ambulanceId: _ambulanceId,
+        driverId: _professionalService.currentProfessional?.uid ?? '',
+        driverName: _professionalService.professionalName,
+        ambulanceId: _professionalService.employeeId,
       );
       
       Get.back(); // Close loading dialog
@@ -1244,7 +1290,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     }
   }
   
-  void _declineRequest(EmergencyRequest request) {
+  void _declineRequest(EmergencyRequest request) async {
     Get.dialog(
       AlertDialog(
         shape: RoundedRectangleBorder(
@@ -1266,15 +1312,51 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Get.back();
-              // In a real app, you might want to track declined requests
-              Get.snackbar(
-                'Request Declined',
-                'You have declined the emergency request',
-                backgroundColor: Colors.orange,
-                colorText: Colors.white,
+              
+              // Show loading dialog
+              Get.dialog(
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF5252)),
+                ),
+                barrierDismissible: false,
               );
+              
+              try {
+                // Add declined by driver info to the request
+                final success = await _emergencyService.declineRequest(
+                  requestId: request.id,
+                  driverId: _professionalService.currentProfessional?.uid ?? '',
+                  driverName: _professionalService.professionalName,
+                );
+                
+                Get.back(); // Close loading dialog
+                
+                if (success) {
+                  Get.snackbar(
+                    'Request Declined',
+                    'You have declined the emergency request. It will be reassigned to another driver.',
+                    backgroundColor: Colors.orange,
+                    colorText: Colors.white,
+                  );
+                } else {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to decline request. Please try again.',
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                }
+              } catch (e) {
+                Get.back(); // Close loading dialog
+                Get.snackbar(
+                  'Error',
+                  'An error occurred while declining the request.',
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF5252),
@@ -1308,24 +1390,21 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
         break;
     }
   }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} min ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hr ago';
+    } else {
+      return '${difference.inDays} days ago';
+    }
+  }
 }
 
 // Remove local EmergencyRequest class - using the one from models
-
-class NotificationItem {
-  final String id;
-  final String title;
-  final String message;
-  final String time;
-  bool isRead;
-  final String type;
-
-  NotificationItem({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.time,
-    required this.isRead,
-    required this.type,
-  });
-}

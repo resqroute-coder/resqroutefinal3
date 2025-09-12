@@ -54,7 +54,7 @@ class _ProfessionalLoginScreenState extends State<ProfessionalLoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Get.back(),
         ),
         title: Row(
           children: [

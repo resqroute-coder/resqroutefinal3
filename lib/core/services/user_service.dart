@@ -4,12 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/patient_model.dart';
 import 'patient_firestore_service.dart';
+import 'notification_service.dart';
 
 class UserService extends GetxController {
   static UserService get instance => Get.find();
   
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final PatientFirestoreService _firestoreService = PatientFirestoreService();
+  late final NotificationService _notificationService;
   
   // Patient data observables
   final Rx<PatientModel?> _currentPatient = Rx<PatientModel?>(null);
@@ -53,6 +55,7 @@ class UserService extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _notificationService = Get.find<NotificationService>();
     _initializeAuthListener();
     loadUserData();
   }
@@ -63,18 +66,16 @@ class UserService extends GetxController {
     super.onClose();
   }
 
-  // Initialize Firebase Auth listener
-  void _initializeAuthListener() {
-    _auth.authStateChanges().listen((User? user) async {
-      if (user != null) {
-        await _setupPatientDataStream(user.uid);
-        _isLoggedIn.value = true;
-      } else {
-        _patientDataSubscription?.cancel();
-        _currentPatient.value = null;
-        _isLoggedIn.value = false;
-      }
-    });
+
+  // Check if user is a patient (exists in users collection)
+  Future<bool> _isPatientUser(String uid) async {
+    try {
+      final doc = await _firestoreService.getPatientData(uid);
+      return doc != null;
+    } catch (e) {
+      // If error accessing users collection, assume it's a professional
+      return false;
+    }
   }
 
   // Setup real-time patient data stream
@@ -177,6 +178,10 @@ class UserService extends GetxController {
     
     if (updates.isNotEmpty) {
       await _firestoreService.updateCurrentPatientData(updates);
+      
+      // Send profile update notification
+      await _sendProfileUpdateNotification(updates);
+      
       // Real-time stream will automatically update the data
       print('UserService: Profile updated, real-time stream will reflect changes');
     }
@@ -205,6 +210,10 @@ class UserService extends GetxController {
     
     if (updates.isNotEmpty) {
       await _firestoreService.updateCurrentPatientData(updates);
+      
+      // Send medical info update notification
+      await _sendMedicalInfoUpdateNotification(updates);
+      
       // Real-time stream will automatically update the data
       print('UserService: Medical info updated, real-time stream will reflect changes');
     }
@@ -216,11 +225,24 @@ class UserService extends GetxController {
     String? selectedLanguage,
     String? selectedTheme,
   }) async {
+    final oldNotifications = _notificationsEnabled.value;
+    
     if (notificationsEnabled != null) _notificationsEnabled.value = notificationsEnabled;
     if (selectedLanguage != null) _selectedLanguage.value = selectedLanguage;
     if (selectedTheme != null) _selectedTheme.value = selectedTheme;
     
     await saveUserPreferences();
+    
+    // Send notification about preference changes
+    if (notificationsEnabled != null && notificationsEnabled != oldNotifications) {
+      await _sendPreferenceUpdateNotification('Notifications', notificationsEnabled ? 'Enabled' : 'Disabled');
+    }
+    if (selectedLanguage != null) {
+      await _sendPreferenceUpdateNotification('Language', selectedLanguage);
+    }
+    if (selectedTheme != null) {
+      await _sendPreferenceUpdateNotification('Theme', selectedTheme);
+    }
   }
 
   // Login user with Firebase
@@ -234,6 +256,9 @@ class UserService extends GetxController {
       if (userCredential.user != null) {
         await _setupPatientDataStream(userCredential.user!.uid);
         _isLoggedIn.value = true;
+        
+        // Note: Login notifications are now handled by NotificationService._sendWelcomeNotification()
+        // which provides role-specific welcome messages and sample notifications
       }
     } on FirebaseAuthException catch (e) {
       // Re-throw FirebaseAuthException to be handled by the UI
@@ -252,6 +277,10 @@ class UserService extends GetxController {
           try {
             await _setupPatientDataStream(currentUser.uid);
             _isLoggedIn.value = true;
+            
+            // Note: Login notifications are now handled by NotificationService._sendWelcomeNotification()
+            // which provides role-specific welcome messages and sample notifications
+            
             return; // Success despite the error
           } catch (dataError) {
             throw Exception('Login successful but failed to load user data. Please try again.');
@@ -268,16 +297,110 @@ class UserService extends GetxController {
 
   // Logout user
   Future<void> logoutUser() async {
-    // Cancel real-time subscription
-    _patientDataSubscription?.cancel();
+    final user = _auth.currentUser;
+    
+    // Send logout notification before signing out
+    if (user != null) {
+      await _notificationService.sendEmergencyNotification(
+        userId: user.uid,
+        title: 'Logged Out Successfully',
+        message: 'You have been logged out from ResQRoute. Thank you for using our emergency services.',
+        type: NotificationType.info,
+        data: {
+          'event': 'patient_logout',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+    }
     
     await _auth.signOut();
     _currentPatient.value = null;
     _isLoggedIn.value = false;
-    
-    // Clear preferences but keep app settings
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_id');
+    _patientDataSubscription?.cancel();
+  }
+
+  void _initializeAuthListener() {
+    _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        _setupPatientDataStream(user.uid);
+        _isLoggedIn.value = true;
+      } else {
+        _currentPatient.value = null;
+        _isLoggedIn.value = false;
+        _patientDataSubscription?.cancel();
+      }
+    });
+  }
+
+  // Send profile update notification
+  Future<void> _sendProfileUpdateNotification(Map<String, dynamic> updates) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final updatedFields = updates.keys.join(', ');
+      
+      await _notificationService.sendEmergencyNotification(
+        userId: user.uid,
+        title: 'Profile Updated',
+        message: 'Your profile information has been updated: $updatedFields',
+        type: NotificationType.info,
+        data: {
+          'event': 'profile_update',
+          'updated_fields': updates.keys.toList(),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (e) {
+      print('Error sending profile update notification: $e');
+    }
+  }
+
+  // Send medical info update notification
+  Future<void> _sendMedicalInfoUpdateNotification(Map<String, dynamic> updates) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final updatedFields = updates.keys.join(', ');
+      
+      await _notificationService.sendEmergencyNotification(
+        userId: user.uid,
+        title: 'Medical Information Updated',
+        message: 'Your medical information has been updated: $updatedFields',
+        type: NotificationType.info,
+        data: {
+          'event': 'medical_update',
+          'updated_fields': updates.keys.toList(),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (e) {
+      print('Error sending medical info update notification: $e');
+    }
+  }
+
+  // Send preference update notification
+  Future<void> _sendPreferenceUpdateNotification(String setting, String value) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      await _notificationService.sendEmergencyNotification(
+        userId: user.uid,
+        title: 'Settings Updated',
+        message: '$setting has been changed to: $value',
+        type: NotificationType.info,
+        data: {
+          'event': 'preference_update',
+          'setting': setting,
+          'value': value,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (e) {
+      print('Error sending preference update notification: $e');
+    }
   }
 
   // Get greeting based on time

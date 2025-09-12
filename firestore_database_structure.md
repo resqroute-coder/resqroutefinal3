@@ -6,13 +6,13 @@ This document outlines the complete Firestore database structure for the ResQRou
 ## Database Collections
 
 ### 1. Users Collection (`/users/{userId}`)
-**Purpose**: Store all user profiles, authentication data, and personal information
+**Purpose**: Store all patient profiles, authentication data, and personal information
 
 **Document Structure**:
 ```json
 {
   "userId": "string (auto-generated)",
-  "role": "patient | driver | hospital_staff | traffic_police",
+  "role": "patient",
   "email": "string",
   "phone": "string",
   "fullName": "string",
@@ -21,8 +21,7 @@ This document outlines the complete Firestore database structure for the ResQRou
   "createdAt": "timestamp",
   "updatedAt": "timestamp",
   
-  // Role-specific fields
-  // For Patients:
+  // Patient-specific fields:
   "dateOfBirth": "timestamp",
   "bloodGroup": "string",
   "address": {
@@ -39,33 +38,52 @@ This document outlines the complete Firestore database structure for the ResQRou
     "provider": "string",
     "policyNumber": "string",
     "validUntil": "timestamp"
-  },
-  
-  // For Drivers:
+  }
+}
+```
+
+### 2. Professional Collection (`/professional/{userId}`)
+**Purpose**: Store all professional profiles (drivers, hospital staff, traffic police) with role-specific data
+
+**Document Structure**:
+```json
+{
+  "userId": "string (matches Firebase Auth UID)",
+  "role": "driver | hospital_staff | traffic_police",
   "employeeId": "string",
-  "licenseNumber": "string",
-  "licenseType": "string",
-  "experience": "number",
-  "ambulanceId": "string",
-  "isOnDuty": "boolean",
-  "currentLocation": {
-    "latitude": "number",
-    "longitude": "number",
-    "timestamp": "timestamp"
-  },
+  "email": "string",
+  "fullName": "string",
+  "phone": "string",
+  "isActive": "boolean",
+  "createdAt": "timestamp",
+  "updatedAt": "timestamp",
   
-  // For Hospital Staff:
-  "hospitalId": "string",
-  "department": "string",
-  "designation": "string",
-  "employeeId": "string",
-  
-  // For Traffic Police:
-  "badgeNumber": "string",
-  "rank": "string",
-  "stationName": "string",
-  "sector": "string",
-  "shift": "string"
+  // Additional professional-specific data stored in additionalData field
+  "additionalData": {
+    // For Drivers:
+    "vehicleNumber": "string (e.g., AMB-001)",
+    "licenseNumber": "string (e.g., DL-2024-001)",
+    "ambulanceType": "string (e.g., Advanced Life Support)",
+    "experience": "string (e.g., 5 years)",
+    
+    // For Hospital Staff:
+    "hospitalName": "string (e.g., Max Super Specialty Hospital)",
+    "hospitalType": "string (e.g., Multi-Specialty Hospital)",
+    "licenseNumber": "string (e.g., HSP-2024-001)",
+    "totalBeds": "string (e.g., 150)",
+    "availableBeds": "string (e.g., 23)",
+    "departments": "string (e.g., 12)",
+    "emergencyContact": "string (e.g., +91 120 456 7891)",
+    
+    // For Traffic Police:
+    "badgeNumber": "string (e.g., OFF001)",
+    "rank": "string (e.g., Senior Officer)",
+    "stationName": "string (e.g., Sector 18 Traffic Police Station)",
+    "sector": "string (e.g., Sector 18-22)",
+    "shift": "string (e.g., Day Shift 8AM-8PM)",
+    "vehicleNumber": "string (e.g., TPC-001)",
+    "jurisdiction": "string (e.g., Highway & City Roads)"
+  }
 }
 ```
 
