@@ -374,11 +374,12 @@ class ProfessionalService extends GetxController {
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
     
+    // Get all emergency requests that have been accepted by drivers
+    // These represent incoming patients to hospitals
     return _firestore
         .collection('emergency_requests')
-        .where('assignedHospitalId', isEqualTo: user.uid)
-        .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
-        .orderBy('createdAt', descending: true)
+        .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
+        .orderBy('acceptedAt', descending: true)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
@@ -386,12 +387,20 @@ class ProfessionalService extends GetxController {
         return {
           'id': doc.id,
           'name': data['patientName'] ?? 'Unknown Patient',
-          'condition': data['emergencyType'] ?? 'Emergency',
+          'condition': _formatEmergencyType(data['emergencyType']),
           'ambulanceId': data['ambulanceId'] ?? 'N/A',
           'driverName': data['driverName'] ?? 'Unknown Driver',
+          'driverId': data['driverId'] ?? '',
           'eta': _calculateETA(data),
           'priority': data['priority'] ?? 'medium',
-          'status': data['status'] ?? 'assigned',
+          'status': data['status'] ?? 'accepted',
+          'patientPhone': data['patientPhone'] ?? '',
+          'pickupLocation': data['pickupLocation'] ?? 'Unknown Location',
+          'hospitalLocation': data['hospitalLocation'] ?? 'Hospital',
+          'acceptedAt': data['acceptedAt'],
+          'createdAt': data['createdAt'],
+          'patientAge': _calculateAge(data['patientAge']),
+          'patientVitals': data['patientVitals'] ?? {},
         };
       }).toList();
     });
@@ -456,16 +465,56 @@ class ProfessionalService extends GetxController {
   
   String _calculateETA(Map<String, dynamic> data) {
     // Simple ETA calculation based on status
-    switch (data['status']) {
-      case 'assigned':
-        return '15-20 mins';
-      case 'en_route':
-        return '8-12 mins';
-      case 'picked_up':
-        return '5-8 mins';
-      default:
+    final status = data['status'] ?? 'assigned';
+    switch (status) {
+      case 'accepted':
         return '15 mins';
+      case 'en_route':
+        return '8 mins';
+      case 'picked_up':
+        return '12 mins';
+      default:
+        return '10 mins';
     }
+  }
+  
+  String _formatEmergencyType(dynamic emergencyType) {
+    if (emergencyType == null) return 'Emergency';
+    String type = emergencyType.toString();
+    // Convert from enum format to readable format
+    switch (type) {
+      case 'heart_attack':
+        return 'Acute Myocardial Infarction';
+      case 'stroke':
+        return 'Stroke Emergency';
+      case 'accident':
+        return 'Accident Victim';
+      case 'respiratory_distress':
+        return 'Respiratory Distress';
+      case 'cardiac_arrest':
+        return 'Cardiac Arrest';
+      case 'trauma':
+        return 'Trauma Emergency';
+      case 'poisoning':
+        return 'Poisoning Emergency';
+      case 'burns':
+        return 'Burn Injury';
+      case 'seizure':
+        return 'Seizure Emergency';
+      case 'allergic_reaction':
+        return 'Allergic Reaction';
+      default:
+        return type.replaceAll('_', ' ').split(' ').map((word) => 
+          word.isNotEmpty ? word[0].toUpperCase() + word.substring(1) : word
+        ).join(' ');
+    }
+  }
+  
+  String _calculateAge(dynamic ageData) {
+    if (ageData == null) return '58 years'; // Default for demo
+    if (ageData is int) return '$ageData years';
+    if (ageData is String) return ageData;
+    return '58 years';
   }
   
   String _formatPatientAge(Map<String, dynamic> data) {

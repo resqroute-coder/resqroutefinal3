@@ -37,6 +37,7 @@ import 'features/police/traffic_police_profile_screen.dart';
 import 'features/police/traffic_police_analytics_screen.dart';
 import 'features/hospital/hospital_dashboard_screen.dart';
 import 'features/hospital/hospital_live_tracking_screen.dart';
+import 'features/hospital/patient_live_tracking_screen.dart';
 import 'features/hospital/emergency_alert_creation_screen.dart';
 import 'features/hospital/ambulance_assignment_screen.dart';
 import 'features/hospital/hospital_reports_screen.dart';
@@ -143,6 +144,7 @@ class ResQRouteApp extends StatelessWidget {
         GetPage(name: '/traffic-police-analytics', page: () => const TrafficPoliceAnalyticsScreen()),
         GetPage(name: '/hospital-dashboard', page: () => const HospitalDashboardScreen()),
         GetPage(name: '/hospital-live-tracking', page: () => const HospitalLiveTrackingScreen()),
+        GetPage(name: '/patient-live-tracking', page: () => const PatientLiveTrackingScreen()),
         GetPage(name: '/emergency-alert-creation', page: () => const EmergencyAlertCreationScreen()),
         GetPage(name: '/ambulance-assignment', page: () => const AmbulanceAssignmentScreen()),
         GetPage(name: '/hospital-reports', page: () => const HospitalReportsScreen()),

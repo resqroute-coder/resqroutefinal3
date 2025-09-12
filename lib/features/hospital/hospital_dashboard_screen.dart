@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../core/services/professional_service.dart';
 import '../../shared/widgets/ambulance_map_widget.dart';
 import '../../shared/widgets/ambulance_simulator_widget.dart';
+import '../../scripts/simulate_ambulance_tracking.dart';
+import '../../scripts/test_patient_tracking_workflow.dart';
 
 class HospitalDashboardScreen extends StatefulWidget {
   const HospitalDashboardScreen({Key? key}) : super(key: key);
@@ -273,6 +275,16 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
             // Testing Tools (Development Only)
             const AmbulanceSimulatorWidget(),
             
+            const SizedBox(height: 16),
+            
+            // Ambulance Tracking Simulator
+            const AmbulanceTrackingSimulator(),
+            
+            const SizedBox(height: 16),
+            
+            // Patient Tracking Workflow Tester
+            const PatientTrackingWorkflowTester(),
+            
             const SizedBox(height: 24),
             
             // Quick Actions
@@ -413,8 +425,8 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
 
     return GestureDetector(
       onTap: () {
-        // Navigate to live tracking screen with patient data
-        Get.toNamed('/hospital-live-tracking', arguments: {
+        // Navigate to patient live tracking screen with patient data
+        Get.toNamed('/patient-live-tracking', arguments: {
           'patient': patient,
           'tripId': patient['id'],
           'ambulanceId': patient['ambulanceId'],
