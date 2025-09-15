@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'dart:async';
 import 'dart:math';
-import '../../core/services/ambulance_location_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
 
 /// Widget for simulating ambulance movement for testing purposes
 /// This helps demonstrate real-time tracking without actual GPS data
@@ -14,7 +14,7 @@ class AmbulanceSimulatorWidget extends StatefulWidget {
 }
 
 class _AmbulanceSimulatorWidgetState extends State<AmbulanceSimulatorWidget> {
-  final AmbulanceLocationService _ambulanceService = Get.find<AmbulanceLocationService>();
+  final AmbulanceTrackingService _ambulanceService = Get.find<AmbulanceTrackingService>();
   Timer? _simulationTimer;
   bool _isSimulating = false;
   

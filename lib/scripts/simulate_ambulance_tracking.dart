@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../core/services/ambulance_location_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -13,7 +13,7 @@ class AmbulanceTrackingSimulator extends StatefulWidget {
 }
 
 class _AmbulanceTrackingSimulatorState extends State<AmbulanceTrackingSimulator> {
-  final AmbulanceLocationService _locationService = Get.find<AmbulanceLocationService>();
+  final AmbulanceTrackingService _locationService = Get.find<AmbulanceTrackingService>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   bool _isSimulating = false;

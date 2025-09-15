@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/services/emergency_request_service.dart';
-import '../core/services/ambulance_location_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
 import '../core/services/professional_service.dart';
 import '../core/models/emergency_request_model.dart';
 import 'dart:async';
@@ -16,7 +16,7 @@ class PatientTrackingWorkflowTester extends StatefulWidget {
 
 class _PatientTrackingWorkflowTesterState extends State<PatientTrackingWorkflowTester> {
   final EmergencyRequestService _emergencyService = Get.find<EmergencyRequestService>();
-  final AmbulanceLocationService _locationService = Get.find<AmbulanceLocationService>();
+  final AmbulanceTrackingService _locationService = Get.find<AmbulanceTrackingService>();
   final ProfessionalService _professionalService = Get.find<ProfessionalService>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   

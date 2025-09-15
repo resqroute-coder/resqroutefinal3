@@ -4,7 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../config/api_config.dart';
-import 'ambulance_location_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
 import 'dart:async';
 
 class MapsService extends GetxController {
@@ -19,7 +19,7 @@ class MapsService extends GetxController {
   final RxBool _isLoadingLocation = false.obs;
   
   // Ambulance tracking
-  final AmbulanceLocationService _ambulanceService = Get.find<AmbulanceLocationService>();
+  final AmbulanceTrackingService _ambulanceService = Get.find<AmbulanceTrackingService>();
   StreamSubscription<List<Map<String, dynamic>>>? _ambulanceSubscription;
 
   // Hospital locations in Mumbai
@@ -511,15 +511,14 @@ class MapsService extends GetxController {
   }
 
   // Display route on map
-  void _displayRoute(Map<String, dynamic> route) {
+  void _displayRoute(List<Map<String, dynamic>> route) {
     // Clear existing polylines
     _polylines.clear();
     
-    // Create route polyline
-    final routePoints = route['routePoints'] as List<dynamic>? ?? [];
-    if (routePoints.isNotEmpty) {
-      final points = routePoints.map((point) => 
-        LatLng(point['latitude'], point['longitude'])
+    // Create route polyline from waypoints
+    if (route.isNotEmpty) {
+      final points = route.map((waypoint) => 
+        LatLng(waypoint['latitude'] ?? 0.0, waypoint['longitude'] ?? 0.0)
       ).toList();
       
       _polylines.add(

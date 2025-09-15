@@ -196,7 +196,7 @@ class ProfessionalService extends GetxController {
       // Query completed trips for today
       final tripsQuery = await _firestore
           .collection('emergency_requests')
-          .where('assignedDriverId', isEqualTo: user.uid)
+          .where('driverId', isEqualTo: user.uid)
           .where('status', isEqualTo: 'completed')
           .where('completedAt', isGreaterThanOrEqualTo: startOfDay)
           .where('completedAt', isLessThan: endOfDay)
@@ -277,7 +277,7 @@ class ProfessionalService extends GetxController {
       final incomingQuery = await _firestore
           .collection('emergency_requests')
           .where('assignedHospitalId', isEqualTo: user.uid)
-          .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+          .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
           .get();
       
       // Get critical cases count
@@ -285,7 +285,7 @@ class ProfessionalService extends GetxController {
           .collection('emergency_requests')
           .where('assignedHospitalId', isEqualTo: user.uid)
           .where('priority', isEqualTo: 'critical')
-          .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+          .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
           .get();
       
       return {
@@ -309,7 +309,7 @@ class ProfessionalService extends GetxController {
       try {
         activeQuery = await _firestore
             .collection('emergency_requests')
-            .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+            .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
             .get();
       } catch (e) {
         print('Error accessing emergency_requests for active emergencies: $e');
@@ -334,7 +334,7 @@ class ProfessionalService extends GetxController {
         criticalQuery = await _firestore
             .collection('emergency_requests')
             .where('priority', isEqualTo: 'critical')
-            .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+            .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
             .get();
       } catch (e) {
         print('Error accessing emergency_requests for critical cases: $e');
@@ -410,7 +410,7 @@ class ProfessionalService extends GetxController {
   Stream<List<Map<String, dynamic>>> getActiveEmergenciesStream() {
     return _firestore
         .collection('emergency_requests')
-        .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+        .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -421,7 +421,7 @@ class ProfessionalService extends GetxController {
           'ambulanceId': data['ambulanceId'] ?? 'N/A',
           'patientName': data['patientName'] ?? 'Unknown Patient',
           'priority': data['priority'] ?? 'medium',
-          'status': data['status'] ?? 'assigned',
+          'status': data['status'] ?? 'accepted',
           'emergencyType': data['emergencyType'] ?? 'Emergency',
           'patientAge': _formatPatientAge(data),
           'location': data['pickupLocation'] ?? 'Unknown Location',
@@ -465,7 +465,7 @@ class ProfessionalService extends GetxController {
   
   String _calculateETA(Map<String, dynamic> data) {
     // Simple ETA calculation based on status
-    final status = data['status'] ?? 'assigned';
+    final status = data['status'] ?? 'accepted';
     switch (status) {
       case 'accepted':
         return '15 mins';

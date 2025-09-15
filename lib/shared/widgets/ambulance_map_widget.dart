@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/services/maps_service.dart';
-import '../../core/services/ambulance_location_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
 import '../../core/services/emergency_request_service.dart';
 
 class AmbulanceMapWidget extends StatefulWidget {
@@ -25,7 +25,7 @@ class AmbulanceMapWidget extends StatefulWidget {
 
 class _AmbulanceMapWidgetState extends State<AmbulanceMapWidget> {
   final MapsService _mapsService = Get.put(MapsService());
-  final AmbulanceLocationService _ambulanceService = Get.put(AmbulanceLocationService());
+  final AmbulanceTrackingService _ambulanceService = Get.put(AmbulanceTrackingService());
   final EmergencyRequestService _emergencyService = Get.put(EmergencyRequestService());
   
   String _selectedFilter = 'all';

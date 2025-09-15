@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/emergency_request_service.dart';
+import '../../core/services/professional_service.dart';
 import '../../core/models/emergency_request_model.dart';
+import 'driver_navigation_screen.dart';
 
 class EmergencyRequestDetailsScreen extends StatefulWidget {
   const EmergencyRequestDetailsScreen({super.key});
@@ -13,6 +15,7 @@ class EmergencyRequestDetailsScreen extends StatefulWidget {
 
 class _EmergencyRequestDetailsScreenState extends State<EmergencyRequestDetailsScreen> {
   final EmergencyRequestService _emergencyService = Get.find<EmergencyRequestService>();
+  final ProfessionalService _professionalService = Get.find<ProfessionalService>();
   EmergencyRequest? _currentRequest;
   String? _requestId;
   bool _isLoading = true;
@@ -454,6 +457,62 @@ class _EmergencyRequestDetailsScreenState extends State<EmergencyRequestDetailsS
 
   Widget _buildActionButtons() {
     switch (_currentRequest!.status) {
+      case RequestStatus.pending:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: () => _acceptRequest(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white, size: 24),
+                    SizedBox(width: 8),
+                    Text(
+                      'Accept Emergency Request',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => _declineRequest(),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFFF5252), width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Decline Request',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF5252),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
       case RequestStatus.accepted:
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -462,7 +521,7 @@ class _EmergencyRequestDetailsScreenState extends State<EmergencyRequestDetailsS
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () => _updateStatus(RequestStatus.enRoute),
+                onPressed: () => _startNavigation(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2196F3),
                   shape: RoundedRectangleBorder(
@@ -472,10 +531,10 @@ class _EmergencyRequestDetailsScreenState extends State<EmergencyRequestDetailsS
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.directions_car, color: Colors.white, size: 24),
+                    Icon(Icons.navigation, color: Colors.white, size: 24),
                     SizedBox(width: 8),
                     Text(
-                      'Start Journey to Patient',
+                      'Start Navigation to Patient',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -711,6 +770,179 @@ class _EmergencyRequestDetailsScreenState extends State<EmergencyRequestDetailsS
         ],
       ),
     );
+  }
+
+  void _acceptRequest() async {
+    try {
+      // Show loading dialog
+      Get.dialog(
+        const Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF5252)),
+        ),
+        barrierDismissible: false,
+      );
+      
+      final success = await _emergencyService.acceptRequest(
+        requestId: _currentRequest!.id,
+        driverId: _professionalService.currentProfessional?.uid ?? '',
+        driverName: _professionalService.professionalName,
+        ambulanceId: _professionalService.employeeId,
+      );
+      
+      Get.back(); // Close loading dialog
+      
+      if (success) {
+        // Update local state
+        setState(() {
+          _currentRequest = _currentRequest!.copyWith(
+            status: RequestStatus.accepted,
+            driverId: _professionalService.currentProfessional?.uid,
+            driverName: _professionalService.professionalName,
+            ambulanceId: _professionalService.employeeId,
+          );
+        });
+        
+        Get.snackbar(
+          'Request Accepted',
+          'You have accepted the emergency request for ${_currentRequest!.patientName}',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        
+        // Navigate to driver navigation screen
+        await Future.delayed(const Duration(seconds: 1));
+        Get.to(() => const DriverNavigationScreen(), arguments: _currentRequest!.id);
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to accept request. Please try again.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.back(); // Close loading dialog
+      Get.snackbar(
+        'Error',
+        'An error occurred while accepting the request.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _declineRequest() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Decline Request',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to decline the emergency request for ${_currentRequest!.patientName}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Get.back();
+              
+              // Show loading dialog
+              Get.dialog(
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF5252)),
+                ),
+                barrierDismissible: false,
+              );
+              
+              try {
+                final success = await _emergencyService.declineRequest(
+                  requestId: _currentRequest!.id,
+                  driverId: _professionalService.currentProfessional?.uid ?? '',
+                  driverName: _professionalService.professionalName,
+                );
+                
+                Get.back(); // Close loading dialog
+                
+                if (success) {
+                  Get.snackbar(
+                    'Request Declined',
+                    'You have declined the emergency request. It will be reassigned to another driver.',
+                    backgroundColor: Colors.orange,
+                    colorText: Colors.white,
+                  );
+                  
+                  // Navigate back to dashboard
+                  Get.back();
+                } else {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to decline request. Please try again.',
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                }
+              } catch (e) {
+                Get.back(); // Close loading dialog
+                Get.snackbar(
+                  'Error',
+                  'An error occurred while declining the request.',
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Decline',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startNavigation() async {
+    try {
+      final success = await _emergencyService.updateRequestStatus(
+        requestId: _currentRequest!.id,
+        status: RequestStatus.enRoute,
+      );
+
+      if (success) {
+        Get.snackbar(
+          'Navigation Started',
+          'Journey started. Navigate to patient location.',
+          backgroundColor: Colors.blue,
+          colorText: Colors.white,
+        );
+        
+        // Navigate to navigation screen with request data
+        Get.toNamed('/driver-navigation', arguments: _currentRequest!.id);
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to start navigation. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
 }

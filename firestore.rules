@@ -16,9 +16,44 @@ service cloud.firestore {
       allow read, write: if isAuthenticated() && isOwner(userId);
     }
     
+    // Notifications collection - users can only access their own notifications
+    match /notifications/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Allow users to manage their notification subcollections
+      match /user_notifications/{notificationId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // Ambulance tracking collection - allow authenticated users to read/write tracking data
+    match /ambulance_tracking/{trackingId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Route clearances collection - for traffic police
+    match /route_clearances/{clearanceId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Hospitals collection - for hospital staff
+    match /hospitals/{hospitalId} {
+      allow read, create, update: if isAuthenticated();
+    }
+    
+    // Analytics collection - for performance metrics
+    match /analytics/{analyticsId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     // Professional collection - stores professional profiles
     match /professional/{userId} {
       allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Allow professionals to manage their active requests
+      match /active_requests/{requestId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
     }
     
     // Emergency requests collection - SIMPLIFIED RULES
@@ -37,21 +72,6 @@ service cloud.firestore {
       allow update: if isAuthenticated();
     }
     
-    // Route clearances collection
-    match /route_clearances/{clearanceId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    // Hospitals collection
-    match /hospitals/{hospitalId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    // Analytics collection
-    match /analytics/{analyticsId} {
-      allow read, write: if isAuthenticated();
-    }
-    
     // Ambulance locations collection
     match /ambulance_locations/{ambulanceId} {
       allow read, write: if isAuthenticated();
@@ -62,17 +82,27 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
     
-    // Notifications collection
-    match /notifications/{userId} {
-      allow read, write: if isAuthenticated() && isOwner(userId);
+    // System notifications collection
+    match /system_notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Ambulance tracking collection
+    match /ambulance_tracking/{requestId} {
+      allow read, write: if isAuthenticated();
       
-      match /user_notifications/{notificationId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
+      match /updates/{updateId} {
+        allow read, write: if isAuthenticated();
       }
     }
     
-    // System notifications collection
-    match /system_notifications/{notificationId} {
+    // Hospital notifications collection
+    match /hospital_notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Traffic alerts collection
+    match /traffic_alerts/{alertId} {
       allow read, write: if isAuthenticated();
     }
   }

@@ -150,7 +150,7 @@ void main() async {
 ## API Configuration
 
 ### Google Maps Setup
-The app uses your provided API key: `nacBdt87Xj6ZDTHU3Yaw5XFASEcGaSCL`
+The app uses your provided API key: `AIzaSyDb3k1AXV_cwvf-Hkron_kddeUM0fUSJdg`
 
 Ensure this key has the following APIs enabled:
 - Maps SDK for Android

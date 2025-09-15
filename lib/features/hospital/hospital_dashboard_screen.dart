@@ -5,6 +5,7 @@ import '../../shared/widgets/ambulance_map_widget.dart';
 import '../../shared/widgets/ambulance_simulator_widget.dart';
 import '../../scripts/simulate_ambulance_tracking.dart';
 import '../../scripts/test_patient_tracking_workflow.dart';
+import 'live_ambulance_monitoring_screen.dart';
 
 class HospitalDashboardScreen extends StatefulWidget {
   const HospitalDashboardScreen({Key? key}) : super(key: key);
@@ -160,9 +161,9 @@ class _HospitalDashboardScreenState extends State<HospitalDashboardScreen> {
                       IconButton(
                         icon: const Icon(Icons.fullscreen, color: Color(0xFFFF5252)),
                         onPressed: () {
-                          Get.toNamed('/hospital-live-tracking');
+                          Get.to(() => const LiveAmbulanceMonitoringScreen());
                         },
-                        tooltip: 'Full Screen Map',
+                        tooltip: 'View Live Tracking',
                       ),
                     ],
                   ),

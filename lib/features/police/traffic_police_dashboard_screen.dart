@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/services/professional_service.dart';
 import '../../shared/widgets/ambulance_map_widget.dart';
+import 'traffic_ambulance_monitoring_screen.dart';
 
 class TrafficPoliceDashboardScreen extends StatefulWidget {
   const TrafficPoliceDashboardScreen({Key? key}) : super(key: key);
@@ -187,6 +188,17 @@ class _TrafficPoliceDashboardScreenState extends State<TrafficPoliceDashboardScr
                       : _buildActivityLogTab(),
             ),
           ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Get.to(() => const TrafficAmbulanceMonitoringScreen());
+        },
+        backgroundColor: const Color(0xFFFF5252),
+        icon: const Icon(Icons.traffic, color: Colors.white),
+        label: const Text(
+          'Route Control',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );

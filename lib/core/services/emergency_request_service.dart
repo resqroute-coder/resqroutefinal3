@@ -93,7 +93,7 @@ class EmergencyRequestService extends GetxService {
         'driverId': driverId,
         'driverName': driverName,
         'ambulanceId': ambulanceId,
-        'status': RequestStatus.accepted.toString().split('.').last,
+        'status': 'accepted',
         'acceptedAt': Timestamp.fromDate(DateTime.now()),
       };
 
@@ -102,9 +102,9 @@ class EmergencyRequestService extends GetxService {
           .doc(requestId)
           .update(updatedRequest);
 
-      // Add to driver's active requests
+      // Add to professional's active requests (using professional collection instead of drivers)
       await _firestore
-          .collection('drivers')
+          .collection('professional')
           .doc(driverId)
           .collection('active_requests')
           .doc(requestId)
@@ -130,7 +130,7 @@ class EmergencyRequestService extends GetxService {
               'driverId': driverId,
               'driverName': driverName,
               'ambulanceId': ambulanceId,
-              'status': 'assigned',
+              'status': 'accepted',
               'driverPhone': '+91 98765 43210',
             },
           );
@@ -227,7 +227,7 @@ class EmergencyRequestService extends GetxService {
   }) async {
     try {
       final updateData = <String, dynamic>{
-        'status': status.toString().split('.').last,
+        'status': status.name,
       };
 
       // Add timestamp based on status
@@ -382,7 +382,7 @@ class EmergencyRequestService extends GetxService {
   Stream<List<EmergencyRequest>> getDriverActiveTripsStream() {
     return _firestore
         .collection('emergency_requests')
-        .where('status', whereIn: ['assigned', 'en_route', 'picked_up'])
+        .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
         .snapshots()
         .map((snapshot) {
       final requests = snapshot.docs.map<EmergencyRequest>((doc) {
@@ -402,7 +402,7 @@ class EmergencyRequestService extends GetxService {
     return _firestore
         .collection('emergency_requests')
         .where('driverId', isEqualTo: driverId)
-        .where('status', whereIn: ['accepted', 'enRoute', 'pickedUp'])
+        .where('status', whereIn: ['accepted', 'en_route', 'picked_up'])
         .snapshots()
         .map((snapshot) {
       final requests = snapshot.docs.map<EmergencyRequest>((doc) {
@@ -442,10 +442,10 @@ class EmergencyRequestService extends GetxService {
         .collection('emergency_requests')
         .where('patientId', isEqualTo: patientId)
         .where('status', whereIn: [
-          RequestStatus.pending.toString().split('.').last,
-          RequestStatus.accepted.toString().split('.').last,
-          RequestStatus.enRoute.toString().split('.').last,
-          RequestStatus.pickedUp.toString().split('.').last,
+          'pending',
+          'accepted',
+          'en_route',
+          'picked_up',
         ])
         .orderBy('createdAt', descending: true)
         .limit(1)
@@ -465,8 +465,8 @@ class EmergencyRequestService extends GetxService {
         .collection('emergency_requests')
         .where('patientId', isEqualTo: patientId)
         .where('status', whereIn: [
-          RequestStatus.completed.toString().split('.').last,
-          RequestStatus.cancelled.toString().split('.').last,
+          'completed',
+          'cancelled',
         ])
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -486,8 +486,8 @@ class EmergencyRequestService extends GetxService {
         .collection('emergency_requests')
         .where('driverId', isEqualTo: driverId)
         .where('status', whereIn: [
-          RequestStatus.completed.toString().split('.').last,
-          RequestStatus.cancelled.toString().split('.').last,
+          'completed',
+          'cancelled',
         ])
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -515,9 +515,9 @@ class EmergencyRequestService extends GetxService {
 
       for (var doc in snapshot.docs) {
         final status = doc.data()['status'] as String;
-        if (status == RequestStatus.completed.toString().split('.').last) {
+        if (status == 'completed') {
           completed++;
-        } else if (status == RequestStatus.cancelled.toString().split('.').last) {
+        } else if (status == 'cancelled') {
           cancelled++;
         }
       }
@@ -547,9 +547,9 @@ class EmergencyRequestService extends GetxService {
 
       for (var doc in snapshot.docs) {
         final status = doc.data()['status'] as String;
-        if (status == RequestStatus.completed.toString().split('.').last) {
+        if (status == 'completed') {
           completed++;
-        } else if (status == RequestStatus.cancelled.toString().split('.').last) {
+        } else if (status == 'cancelled') {
           cancelled++;
         }
       }
@@ -608,7 +608,7 @@ class EmergencyRequestService extends GetxService {
           .collection('emergency_requests')
           .doc(requestId)
           .update({
-        'status': RequestStatus.cancelled.toString().split('.').last,
+        'status': 'cancelled',
         'cancelledAt': Timestamp.fromDate(DateTime.now()),
       });
       return true;

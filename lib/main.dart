@@ -6,7 +6,7 @@ import 'core/constants/app_colors.dart';
 import 'core/services/user_service.dart';
 import 'core/services/emergency_request_service.dart';
 import 'core/services/professional_service.dart';
-import 'core/services/ambulance_location_service.dart';
+import 'core/services/ambulance_tracking_service.dart';
 import 'core/services/maps_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/comprehensive_notification_service.dart';
@@ -52,7 +52,7 @@ void main() async {
   Get.put(UserService());
   Get.put(EmergencyRequestService());
   Get.put(ProfessionalService());
-  Get.put(AmbulanceLocationService());
+  Get.put(AmbulanceTrackingService());
   Get.put(MapsService());
   
   // Initialize comprehensive notification service after core services

@@ -1,9 +1,6 @@
 class ApiConfig {
-  // Google Maps API Key - Replace with your actual API key
-  static const String googleMapsApiKey = String.fromEnvironment(
-    'GOOGLE_MAPS_API_KEY',
-    defaultValue: 'YOUR_GOOGLE_MAPS_API_KEY_HERE',
-  );
+  // Google Maps API Key - Configured with your actual API key
+  static const String googleMapsApiKey = 'AIzaSyDb3k1AXV_cwvf-Hkron_kddeUM0fUSJdg';
   
   // Firebase configuration (if needed for other APIs)
   static const String firebaseApiKey = String.fromEnvironment(
@@ -12,15 +9,9 @@ class ApiConfig {
   );
   
   // Other API configurations can be added here
-  static const String placesApiKey = String.fromEnvironment(
-    'GOOGLE_PLACES_API_KEY',
-    defaultValue: 'YOUR_GOOGLE_PLACES_API_KEY_HERE',
-  );
+  static const String placesApiKey = 'AIzaSyDb3k1AXV_cwvf-Hkron_kddeUM0fUSJdg';
   
-  static const String directionsApiKey = String.fromEnvironment(
-    'GOOGLE_DIRECTIONS_API_KEY', 
-    defaultValue: 'YOUR_GOOGLE_DIRECTIONS_API_KEY_HERE',
-  );
+  static const String directionsApiKey = 'AIzaSyDb3k1AXV_cwvf-Hkron_kddeUM0fUSJdg';
   
   // Validation methods
   static bool get isGoogleMapsConfigured => 

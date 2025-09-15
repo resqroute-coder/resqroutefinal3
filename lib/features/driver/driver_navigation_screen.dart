@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/services/emergency_request_service.dart';
+import '../../core/services/ambulance_tracking_service.dart';
+import '../../core/services/professional_service.dart';
+import '../../core/models/emergency_request_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DriverNavigationScreen extends StatefulWidget {
   const DriverNavigationScreen({Key? key}) : super(key: key);
@@ -9,17 +14,129 @@ class DriverNavigationScreen extends StatefulWidget {
 }
 
 class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
-  final NavigationData navigationData = NavigationData(
-    eta: '6 min',
-    distance: '2.3 km',
-    route: 'Via SV Road',
-    patientName: 'Raj Patel',
-    pickupLocation: 'Pickup Location',
-    currentInstruction: 'In 200m, turn right onto Linking Road',
-  );
+  final EmergencyRequestService _emergencyService = Get.find<EmergencyRequestService>();
+  final AmbulanceTrackingService _trackingService = Get.put(AmbulanceTrackingService());
+  final ProfessionalService _professionalService = Get.find<ProfessionalService>();
+  EmergencyRequest? _currentRequest;
+  String? _requestId;
+  bool _isLoading = true;
+  String _currentInstruction = 'Loading navigation...';
+  String _buttonText = 'Confirm Patient Pickup';
+  bool _isPickedUp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestId = Get.arguments as String?;
+    _loadRequestDetails();
+  }
+
+  void _loadRequestDetails() async {
+    if (_requestId != null) {
+      final request = await _emergencyService.getRequestById(_requestId!);
+      if (mounted) {
+        setState(() {
+          _currentRequest = request;
+          _isLoading = false;
+          if (request != null) {
+            _updateNavigationState();
+            _startTracking();
+          }
+        });
+      }
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _updateNavigationState() {
+    if (_currentRequest == null) return;
+    
+    switch (_currentRequest!.status) {
+      case RequestStatus.enRoute:
+        _currentInstruction = 'Navigate to ${_currentRequest!.pickupLocation}. Patient ${_currentRequest!.patientName} is waiting.';
+        _buttonText = 'Confirm Patient Pickup';
+        _isPickedUp = false;
+        break;
+      case RequestStatus.pickedUp:
+        _currentInstruction = 'Patient picked up. Navigate to ${_currentRequest!.hospitalLocation}';
+        _buttonText = 'Complete Trip';
+        _isPickedUp = true;
+        break;
+      default:
+        _currentInstruction = 'Navigate to patient location';
+        _buttonText = 'Confirm Patient Pickup';
+        _isPickedUp = false;
+    }
+  }
+
+  void _startTracking() {
+    if (_currentRequest != null) {
+      final driverId = _professionalService.currentProfessional?.uid ?? '';
+      _trackingService.startTracking(_currentRequest!.id, driverId);
+      
+      // Request route clearance for high priority emergencies
+      if (_currentRequest!.priority == 'critical' || _currentRequest!.priority == 'high') {
+        _trackingService.requestRouteClearance(
+          requestId: _currentRequest!.id,
+          ambulanceId: 'AMB_${_professionalService.currentProfessional?.uid ?? 'unknown'}',
+          fromLat: 19.0760, // Default Mumbai coordinates - should be replaced with actual pickup location
+          fromLng: 72.8777,
+          toLat: 19.0825, // Default hospital coordinates - should be replaced with actual hospital location  
+          toLng: 72.8811,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _trackingService.stopTracking();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF5252),
+          ),
+        ),
+      );
+    }
+
+    if (_currentRequest == null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Get.back(),
+          ),
+          title: const Text(
+            'Navigation',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(
+          child: Text(
+            'Request not found',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -70,7 +187,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        navigationData.eta,
+                        _currentRequest!.estimatedTime,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -78,7 +195,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                         ),
                       ),
                       Text(
-                        '${navigationData.distance} • ${navigationData.route}',
+                        '2.3 km • Via SV Road',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -91,7 +208,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      navigationData.patientName,
+                      _currentRequest!.patientName,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -99,7 +216,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                       ),
                     ),
                     Text(
-                      navigationData.pickupLocation,
+                      _isPickedUp ? 'To Hospital' : 'Pickup Location',
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.grey,
@@ -159,7 +276,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -184,7 +301,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -210,7 +327,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
+                                      color: Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 4,
                                       offset: const Offset(0, 2),
                                     ),
@@ -228,7 +345,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
+                                      color: Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 4,
                                       offset: const Offset(0, 2),
                                     ),
@@ -250,7 +367,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
+                              color: Colors.black.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: const Row(
@@ -321,7 +438,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      navigationData.currentInstruction,
+                      _currentInstruction,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
@@ -350,7 +467,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
-                      // Handle call patient
+                      _makePhoneCall(_currentRequest!.patientPhone);
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.grey),
@@ -396,7 +513,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
-                      // Handle trip details
+                      Get.toNamed('/emergency-request-details', arguments: _currentRequest!.id);
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.grey),
@@ -428,7 +545,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
               height: 56,
               child: ElevatedButton(
                 onPressed: () {
-                  _showConfirmPickupDialog();
+                  _handleMainAction();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF5252),
@@ -437,9 +554,9 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Confirm Patient Pickup',
-                  style: TextStyle(
+                child: Text(
+                  _buttonText,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -453,45 +570,182 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
     );
   }
 
+  void _handleMainAction() {
+    if (_isPickedUp) {
+      _showCompleteDialog();
+    } else {
+      _showConfirmPickupDialog();
+    }
+  }
+
   void _showConfirmPickupDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Confirm Pickup'),
-        content: const Text('Have you picked up the patient and are ready to proceed to the hospital?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Confirm Patient Pickup',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Confirm that you have picked up ${_currentRequest!.patientName} and are heading to the hospital.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
               Get.back();
-              _showPatientPickedUpSuccess();
+              _confirmPickup();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4CAF50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Confirm Pickup', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Confirm Pickup',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _showPatientPickedUpSuccess() {
-    Get.snackbar(
-      'Patient Picked Up',
-      'Navigating to hospital. Drive safely!',
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
+  void _showCompleteDialog() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Complete Trip',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Confirm that ${_currentRequest!.patientName} has been safely delivered to ${_currentRequest!.hospitalLocation}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Get.back();
+              _completeTrip();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF9800),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Complete Trip',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
-    
-    // Update navigation to hospital
-    setState(() {
-      navigationData.currentInstruction = 'Proceed to Apollo Hospital - 1.8 km remaining';
-      navigationData.pickupLocation = 'To Hospital';
-    });
+  }
+
+  void _confirmPickup() async {
+    try {
+      final success = await _emergencyService.updateRequestStatus(
+        requestId: _currentRequest!.id,
+        status: RequestStatus.pickedUp,
+      );
+
+      if (success) {
+        setState(() {
+          _currentRequest = _currentRequest!.copyWith(status: RequestStatus.pickedUp);
+          _updateNavigationState();
+        });
+
+        Get.snackbar(
+          'Patient Picked Up',
+          'Patient has been picked up. Proceeding to hospital.',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to update pickup status. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _completeTrip() async {
+    try {
+      final success = await _emergencyService.updateRequestStatus(
+        requestId: _currentRequest!.id,
+        status: RequestStatus.completed,
+      );
+
+      if (success) {
+        Get.snackbar(
+          'Trip Completed',
+          'Emergency trip has been completed successfully.',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        
+        // Navigate back to dashboard after a short delay
+        Future.delayed(const Duration(seconds: 2), () {
+          Get.offAllNamed('/driver-dashboard');
+        });
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to complete trip. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
+    );
+    try {
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      } else {
+        Get.snackbar(
+          'Error',
+          'Could not launch phone dialer',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Could not launch phone dialer',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }
 
@@ -517,7 +771,7 @@ class MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.withOpacity(0.2)
+      ..color = Colors.grey.withValues(alpha: 0.2)
       ..strokeWidth = 1;
 
     // Draw grid lines
@@ -556,7 +810,7 @@ class RoutePathPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.2)
+      ..color = Colors.black.withValues(alpha: 0.2)
       ..strokeWidth = 6
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
